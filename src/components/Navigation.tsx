@@ -12,8 +12,7 @@ import {
   DollarSign,
   Settings,
   LogOut,
-  Wallet,
-  Shield
+  Wallet
 } from 'lucide-react';
 import {
   NavigationMenu,
@@ -55,8 +54,6 @@ const Navigation = () => {
     { path: '/services', label: 'Services', icon: Settings },
     // Roles - only admin can see
     ...(roleString === 'admin' ? [{ path: '/roles', label: 'Roles', icon: UserCheck }] : []),
-    // Privileges - new menu item
-    { path: '/privileges', label: 'Privileges', icon: Shield },
   ];
 
   const isActive = (path: string) => location.pathname === path;

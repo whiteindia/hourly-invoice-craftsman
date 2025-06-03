@@ -1,3 +1,4 @@
+
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -14,7 +15,6 @@ import Invoices from "./pages/Invoices";
 import Payments from "./pages/Payments";
 import Services from "./pages/Services";
 import Wages from "./pages/Wages";
-import Privileges from "./pages/Privileges";
 import NotFound from "./pages/NotFound";
 import Roles from "./pages/Roles";
 
@@ -106,14 +106,6 @@ function App() {
                 element={
                   <ProtectedRoute requiredRole="admin">
                     <Roles />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/privileges"
-                element={
-                  <ProtectedRoute requireSuperAdmin={true}>
-                    <Privileges />
                   </ProtectedRoute>
                 }
               />
