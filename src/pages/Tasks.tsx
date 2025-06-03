@@ -15,7 +15,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { Database } from '@/integrations/supabase/types';
 import Navigation from '@/components/Navigation';
-import TimeTracker from '@/components/TimeTracker';
 import TaskCommentDialog from '@/components/TaskCommentDialog';
 import { logActivity } from '@/utils/activityLogger';
 
@@ -72,7 +71,6 @@ const Tasks = () => {
   const [selectedProject, setSelectedProject] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [assigneeFilter, setAssigneeFilter] = useState('all');
-  const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [globalServiceFilter, setGlobalServiceFilter] = useState<string>('all');
 
   // Fetch tasks with project and employee data
@@ -276,7 +274,7 @@ const Tasks = () => {
 
   return (
     <Navigation>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div className="flex justify-between items-center mb-6">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Tasks</h1>

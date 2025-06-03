@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -47,7 +46,7 @@ const Projects = () => {
   const [newProject, setNewProject] = useState({
     name: '',
     client_id: '',
-    type: 'Web Development' as ProjectType,
+    type: 'DevOps' as ProjectType,
     hourly_rate: 0,
     status: 'Active' as ProjectStatus
   });
@@ -130,7 +129,7 @@ const Projects = () => {
       setNewProject({
         name: '',
         client_id: '',
-        type: 'Web Development',
+        type: 'DevOps',
         hourly_rate: 0,
         status: 'Active'
       });
@@ -270,7 +269,7 @@ const Projects = () => {
 
   return (
     <Navigation>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div className="flex justify-between items-center mb-6">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Projects</h1>
@@ -342,10 +341,12 @@ const Projects = () => {
                         <SelectValue placeholder="Select a type" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="Web Development">Web Development</SelectItem>
-                        <SelectItem value="Mobile App">Mobile App</SelectItem>
-                        <SelectItem value="UI/UX Design">UI/UX Design</SelectItem>
+                        <SelectItem value="DevOps">DevOps</SelectItem>
+                        <SelectItem value="Marketing">Marketing</SelectItem>
                         <SelectItem value="Consulting">Consulting</SelectItem>
+                        <SelectItem value="Strategy">Strategy</SelectItem>
+                        <SelectItem value="Technical Writing">Technical Writing</SelectItem>
+                        <SelectItem value="BRD">BRD</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -485,10 +486,12 @@ const Projects = () => {
                     <SelectValue placeholder="Select a type" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Web Development">Web Development</SelectItem>
-                    <SelectItem value="Mobile App">Mobile App</SelectItem>
-                    <SelectItem value="UI/UX Design">UI/UX Design</SelectItem>
+                    <SelectItem value="DevOps">DevOps</SelectItem>
+                    <SelectItem value="Marketing">Marketing</SelectItem>
                     <SelectItem value="Consulting">Consulting</SelectItem>
+                    <SelectItem value="Strategy">Strategy</SelectItem>
+                    <SelectItem value="Technical Writing">Technical Writing</SelectItem>
+                    <SelectItem value="BRD">BRD</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
