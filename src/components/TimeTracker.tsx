@@ -1,0 +1,194 @@
+
+import React, { useState, useEffect } from 'react';
+import { Button } from '@/components/ui/button';
+import { Play, Square, Clock } from 'lucide-react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+import { useAuth } from '@/contexts/AuthContext';
+
+interface Task {
+  id: string;
+  name: string;
+}
+
+interface TimeTrackerProps {
+  task: Task;
+  onSuccess: () => void;
+}
+
+interface ActiveTimer {
+  id: string;
+  taskId: string;
+  startTime: Date;
+  entryId: string;
+}
+
+const TimeTracker: React.FC<TimeTrackerProps> = ({ task, onSuccess }) => {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const [activeTimer, setActiveTimer] = useState<ActiveTimer | null>(null);
+  const [elapsedTime, setElapsedTime] = useState(0);
+
+  // Check if there's an existing active timer for this task
+  useEffect(() => {
+    const checkActiveTimer = async () => {
+      const { data, error } = await supabase
+        .from('time_entries')
+        .select('*')
+        .eq('task_id', task.id)
+        .is('end_time', null)
+        .order('start_time', { ascending: false })
+        .limit(1);
+      
+      if (data && data.length > 0) {
+        const entry = data[0];
+        setActiveTimer({
+          id: entry.id,
+          taskId: task.id,
+          startTime: new Date(entry.start_time),
+          entryId: entry.id
+        });
+      }
+    };
+
+    checkActiveTimer();
+  }, [task.id]);
+
+  // Update elapsed time every second when timer is active
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    
+    if (activeTimer) {
+      interval = setInterval(() => {
+        const now = new Date();
+        const elapsed = Math.floor((now.getTime() - activeTimer.startTime.getTime()) / 1000);
+        setElapsedTime(elapsed);
+      }, 1000);
+    }
+    
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [activeTimer]);
+
+  const startTimerMutation = useMutation({
+    mutationFn: async () => {
+      // First, get current user's employee record
+      const { data: employee, error: empError } = await supabase
+        .from('employees')
+        .select('id')
+        .eq('email', user?.email)
+        .single();
+      
+      if (empError || !employee) {
+        throw new Error('Employee record not found. Please contact admin.');
+      }
+
+      const { data, error } = await supabase
+        .from('time_entries')
+        .insert([{
+          task_id: task.id,
+          employee_id: employee.id,
+          start_time: new Date().toISOString()
+        }])
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      setActiveTimer({
+        id: data.id,
+        taskId: task.id,
+        startTime: new Date(data.start_time),
+        entryId: data.id
+      });
+      setElapsedTime(0);
+      toast.success('Timer started!');
+      onSuccess();
+    },
+    onError: (error) => {
+      toast.error('Failed to start timer: ' + error.message);
+    }
+  });
+
+  const stopTimerMutation = useMutation({
+    mutationFn: async () => {
+      if (!activeTimer) throw new Error('No active timer');
+      
+      const endTime = new Date();
+      const durationMinutes = Math.floor((endTime.getTime() - activeTimer.startTime.getTime()) / 60000);
+      
+      const { data, error } = await supabase
+        .from('time_entries')
+        .update({
+          end_time: endTime.toISOString(),
+          duration_minutes: durationMinutes
+        })
+        .eq('id', activeTimer.entryId)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      setActiveTimer(null);
+      setElapsedTime(0);
+      toast.success('Timer stopped!');
+      onSuccess();
+    },
+    onError: (error) => {
+      toast.error('Failed to stop timer: ' + error.message);
+    }
+  });
+
+  const formatTime = (seconds: number) => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const handleStartStop = () => {
+    if (activeTimer) {
+      stopTimerMutation.mutate();
+    } else {
+      startTimerMutation.mutate();
+    }
+  };
+
+  return (
+    <div className="flex items-center space-x-2">
+      <Button
+        size="sm"
+        variant={activeTimer ? "destructive" : "outline"}
+        onClick={handleStartStop}
+        disabled={startTimerMutation.isPending || stopTimerMutation.isPending}
+      >
+        {activeTimer ? (
+          <>
+            <Square className="h-4 w-4 mr-1" />
+            Stop
+          </>
+        ) : (
+          <>
+            <Play className="h-4 w-4 mr-1" />
+            Start
+          </>
+        )}
+      </Button>
+      
+      {activeTimer && (
+        <div className="flex items-center text-sm text-blue-600 font-mono">
+          <Clock className="h-4 w-4 mr-1" />
+          {formatTime(elapsedTime)}
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default TimeTracker;

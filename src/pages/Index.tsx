@@ -1,220 +1,240 @@
+
 import React from 'react';
-import { Link } from 'react-router-dom';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Users, FolderOpen, Clock, FileText, DollarSign, TrendingUp, LogOut } from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
-import { toast } from 'sonner';
+import { Badge } from '@/components/ui/badge';
+import { 
+  DollarSign, 
+  Users, 
+  FolderOpen, 
+  CheckSquare, 
+  Clock,
+  TrendingUp,
+  Calendar,
+  Play
+} from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import Navigation from '@/components/Navigation';
+import { useNavigate } from 'react-router-dom';
 
 const Index = () => {
-  const { user, userRole, signOut } = useAuth();
+  const navigate = useNavigate();
 
-  const handleSignOut = async () => {
-    await signOut();
-    toast.success('Successfully signed out');
+  // Get running tasks (tasks with active time entries)
+  const { data: runningTasks = [] } = useQuery({
+    queryKey: ['running-tasks'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('time_entries')
+        .select(`
+          id,
+          start_time,
+          tasks (
+            id,
+            name,
+            projects (
+              name,
+              clients (name)
+            )
+          )
+        `)
+        .is('end_time', null)
+        .order('start_time', { ascending: false });
+      
+      if (error) throw error;
+      return data || [];
+    }
+  });
+
+  // Get summary statistics
+  const { data: stats } = useQuery({
+    queryKey: ['dashboard-stats'],
+    queryFn: async () => {
+      const [clientsRes, projectsRes, tasksRes, paymentsRes] = await Promise.all([
+        supabase.from('clients').select('id', { count: 'exact' }),
+        supabase.from('projects').select('id', { count: 'exact' }),
+        supabase.from('tasks').select('id', { count: 'exact' }),
+        supabase.from('payments').select('amount')
+      ]);
+
+      const totalRevenue = paymentsRes.data?.reduce((sum, payment) => sum + payment.amount, 0) || 0;
+
+      return {
+        clients: clientsRes.count || 0,
+        projects: projectsRes.count || 0,
+        tasks: tasksRes.count || 0,
+        revenue: totalRevenue
+      };
+    }
+  });
+
+  const formatElapsedTime = (startTime: string) => {
+    const start = new Date(startTime);
+    const now = new Date();
+    const elapsed = Math.floor((now.getTime() - start.getTime()) / 1000);
+    
+    const hours = Math.floor(elapsed / 3600);
+    const minutes = Math.floor((elapsed % 3600) / 60);
+    const seconds = elapsed % 60;
+    
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   };
 
-  // Mock data for dashboard metrics - in real app, fetch based on user role
-  const metrics = [
-    {
-      title: "Total Clients",
-      value: "12",
-      icon: Users,
-      color: "text-blue-600"
-    },
-    {
-      title: "Active Projects",
-      value: "8",
-      icon: FolderOpen,
-      color: "text-green-600"
-    },
-    {
-      title: "Hours This Month",
-      value: "127.5",
-      icon: Clock,
-      color: "text-purple-600"
-    },
-    {
-      title: "Pending Invoices",
-      value: "$8,450",
-      icon: FileText,
-      color: "text-orange-600"
-    }
-  ];
-
-  // Role-based quick actions
-  const getQuickActions = () => {
-    const baseActions = [
-      {
-        title: "View Projects",
-        description: userRole === 'admin' ? "Manage all projects" : "View your projects",
-        icon: FolderOpen,
-        link: "/projects",
-        color: "bg-green-50 hover:bg-green-100 border-green-200"
-      },
-      {
-        title: "View Tasks",
-        description: userRole === 'admin' ? "Manage all tasks" : "View your tasks",
-        icon: Clock,
-        link: "/tasks",
-        color: "bg-purple-50 hover:bg-purple-100 border-purple-200"
-      },
-      {
-        title: "View Invoices",
-        description: userRole === 'admin' ? "Manage all invoices" : "View your invoices",
-        icon: FileText,
-        link: "/invoices",
-        color: "bg-orange-50 hover:bg-orange-100 border-orange-200"
-      }
-    ];
-
-    if (userRole === 'admin') {
-      baseActions.unshift({
-        title: "Manage Clients",
-        description: "Add and manage clients",
-        icon: Users,
-        link: "/clients",
-        color: "bg-blue-50 hover:bg-blue-100 border-blue-200"
-      });
-    }
-
-    return baseActions;
+  const handleRunningTaskClick = () => {
+    navigate('/tasks?status=In Progress');
   };
-
-  const quickActions = getQuickActions();
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
       <Navigation />
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-6">
-            <div className="flex items-center space-x-4">
-              <div className="bg-blue-600 p-2 rounded-lg">
-                <DollarSign className="h-8 w-8 text-white" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">ConsultPro</h1>
-                <p className="text-sm text-gray-600">Professional Invoicing System</p>
-              </div>
-            </div>
-            <div className="flex items-center space-x-4">
-              <div className="text-right">
-                <p className="text-sm font-medium text-gray-900">{user?.email}</p>
-                <p className="text-xs text-gray-600 capitalize">{userRole} User</p>
-              </div>
-              <nav className="hidden md:flex space-x-8">
-                {userRole === 'admin' && (
-                  <Link to="/clients" className="text-gray-600 hover:text-blue-600 transition-colors">Clients</Link>
-                )}
-                <Link to="/projects" className="text-gray-600 hover:text-blue-600 transition-colors">Projects</Link>
-                <Link to="/tasks" className="text-gray-600 hover:text-blue-600 transition-colors">Tasks</Link>
-                <Link to="/invoices" className="text-gray-600 hover:text-blue-600 transition-colors">Invoices</Link>
-              </nav>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={handleSignOut}
-                className="flex items-center space-x-2"
-              >
-                <LogOut className="h-4 w-4" />
-                <span>Sign Out</span>
-              </Button>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Welcome Section */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
-          <h2 className="text-3xl font-bold text-gray-900 mb-2">
-            Welcome back{userRole === 'admin' ? ', Admin' : ''}!
-          </h2>
-          <p className="text-lg text-gray-600">
-            {userRole === 'admin' 
-              ? "Here's an overview of your consulting business" 
-              : "Here's an overview of your projects and activities"
-            }
-          </p>
+          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+          <p className="text-gray-600 mt-2">Welcome to FreelanceHub - Your project management center</p>
         </div>
 
-        {/* Metrics Grid - Show for admin users */}
-        {userRole === 'admin' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            {metrics.map((metric, index) => (
-              <Card key={index} className="hover:shadow-lg transition-shadow duration-200">
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-600">{metric.title}</p>
-                      <p className="text-2xl font-bold text-gray-900">{metric.value}</p>
-                    </div>
-                    <metric.icon className={`h-8 w-8 ${metric.color}`} />
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
-
-        {/* Quick Actions */}
-        <div className="mb-8">
-          <h3 className="text-xl font-semibold text-gray-900 mb-4">Quick Actions</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {quickActions.map((action, index) => (
-              <Link key={index} to={action.link}>
-                <Card className={`${action.color} border-2 transition-all duration-200 cursor-pointer h-full`}>
-                  <CardHeader className="text-center">
-                    <action.icon className="h-12 w-12 mx-auto mb-2 text-gray-700" />
-                    <CardTitle className="text-lg text-gray-900">{action.title}</CardTitle>
-                    <CardDescription className="text-gray-600">{action.description}</CardDescription>
-                  </CardHeader>
-                </Card>
-              </Link>
-            ))}
-          </div>
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Clients</CardTitle>
+              <Users className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats?.clients || 0}</div>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Active Projects</CardTitle>
+              <FolderOpen className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats?.projects || 0}</div>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Tasks</CardTitle>
+              <CheckSquare className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats?.tasks || 0}</div>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+              <DollarSign className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">${stats?.revenue || 0}</div>
+            </CardContent>
+          </Card>
         </div>
 
-        {/* Recent Activity - Show for admin users */}
-        {userRole === 'admin' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Running Tasks */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <TrendingUp className="h-5 w-5" />
-                <span>Recent Activity</span>
+              <CardTitle className="flex items-center">
+                <Play className="h-5 w-5 mr-2 text-green-600" />
+                Active Time Tracking
               </CardTitle>
             </CardHeader>
             <CardContent>
+              {runningTasks.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <Clock className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                  <p>No tasks currently running</p>
+                  <p className="text-sm">Start a timer on any task to track your work</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {runningTasks.map((entry: any) => (
+                    <div
+                      key={entry.id}
+                      className="p-4 border rounded-lg bg-green-50 border-green-200 cursor-pointer hover:bg-green-100 transition-colors"
+                      onClick={handleRunningTaskClick}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="font-medium text-green-900">{entry.tasks.name}</h4>
+                          <p className="text-sm text-green-700">
+                            {entry.tasks.projects.name} • {entry.tasks.projects.clients.name}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <Badge variant="default" className="bg-green-600">
+                            Running
+                          </Badge>
+                          <div className="text-sm font-mono text-green-600 mt-1">
+                            {formatElapsedTime(entry.start_time)}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={handleRunningTaskClick}
+                  >
+                    View All In Progress Tasks
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Quick Actions */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Quick Actions</CardTitle>
+            </CardHeader>
+            <CardContent>
               <div className="space-y-4">
-                <div className="flex items-center justify-between py-2 border-b">
-                  <div>
-                    <p className="font-medium">DevOps consultation for TechCorp</p>
-                    <p className="text-sm text-gray-600">4.5 hours logged</p>
-                  </div>
-                  <span className="text-green-600 font-medium">$450.00</span>
-                </div>
-                <div className="flex items-center justify-between py-2 border-b">
-                  <div>
-                    <p className="font-medium">Marketing strategy for StartupXYZ</p>
-                    <p className="text-sm text-gray-600">3 hours logged</p>
-                  </div>
-                  <span className="text-green-600 font-medium">$360.00</span>
-                </div>
-                <div className="flex items-center justify-between py-2">
-                  <div>
-                    <p className="font-medium">Business consulting for LocalBiz</p>
-                    <p className="text-sm text-gray-600">2.5 hours logged</p>
-                  </div>
-                  <span className="text-green-600 font-medium">$250.00</span>
-                </div>
+                <Button 
+                  className="w-full justify-start" 
+                  variant="outline"
+                  onClick={() => navigate('/tasks')}
+                >
+                  <CheckSquare className="h-4 w-4 mr-2" />
+                  View All Tasks
+                </Button>
+                <Button 
+                  className="w-full justify-start" 
+                  variant="outline"
+                  onClick={() => navigate('/projects')}
+                >
+                  <FolderOpen className="h-4 w-4 mr-2" />
+                  Manage Projects
+                </Button>
+                <Button 
+                  className="w-full justify-start" 
+                  variant="outline"
+                  onClick={() => navigate('/employees')}
+                >
+                  <Users className="h-4 w-4 mr-2" />
+                  Team Management
+                </Button>
+                <Button 
+                  className="w-full justify-start" 
+                  variant="outline"
+                  onClick={() => navigate('/invoices')}
+                >
+                  <FileText className="h-4 w-4 mr-2" />
+                  Create Invoice
+                </Button>
               </div>
             </CardContent>
           </Card>
-        )}
-      </main>
+        </div>
+      </div>
     </div>
   );
 };

@@ -14,6 +14,7 @@ import Tasks from "./pages/Tasks";
 import Invoices from "./pages/Invoices";
 import Payments from "./pages/Payments";
 import Services from "./pages/Services";
+import Employees from "./pages/Employees";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -35,6 +36,11 @@ const App = () => (
             <Route path="/clients" element={
               <ProtectedRoute requiredRole="admin">
                 <Clients />
+              </ProtectedRoute>
+            } />
+            <Route path="/employees" element={
+              <ProtectedRoute>
+                <Employees />
               </ProtectedRoute>
             } />
             <Route path="/projects" element={

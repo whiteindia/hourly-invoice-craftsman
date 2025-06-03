@@ -39,6 +39,36 @@ export type Database = {
         }
         Relationships: []
       }
+      employees: {
+        Row: {
+          contact_number: string | null
+          created_at: string
+          email: string
+          id: string
+          name: string
+          role: string
+          updated_at: string
+        }
+        Insert: {
+          contact_number?: string | null
+          created_at?: string
+          email: string
+          id?: string
+          name: string
+          role?: string
+          updated_at?: string
+        }
+        Update: {
+          contact_number?: string | null
+          created_at?: string
+          email?: string
+          id?: string
+          name?: string
+          role?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       invoice_tasks: {
         Row: {
           id: string
@@ -330,6 +360,8 @@ export type Database = {
       }
       tasks: {
         Row: {
+          assignee_id: string | null
+          assigner_id: string | null
           created_at: string
           date: string
           hours: number
@@ -341,6 +373,8 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          assignee_id?: string | null
+          assigner_id?: string | null
           created_at?: string
           date?: string
           hours?: number
@@ -352,6 +386,8 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          assignee_id?: string | null
+          assigner_id?: string | null
           created_at?: string
           date?: string
           hours?: number
@@ -364,10 +400,75 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "tasks_assignee_id_fkey"
+            columns: ["assignee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_assigner_id_fkey"
+            columns: ["assigner_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "tasks_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      time_entries: {
+        Row: {
+          comment: string | null
+          created_at: string
+          duration_minutes: number | null
+          employee_id: string
+          end_time: string | null
+          id: string
+          start_time: string
+          task_id: string
+          updated_at: string
+        }
+        Insert: {
+          comment?: string | null
+          created_at?: string
+          duration_minutes?: number | null
+          employee_id: string
+          end_time?: string | null
+          id?: string
+          start_time: string
+          task_id: string
+          updated_at?: string
+        }
+        Update: {
+          comment?: string | null
+          created_at?: string
+          duration_minutes?: number | null
+          employee_id?: string
+          end_time?: string | null
+          id?: string
+          start_time?: string
+          task_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "time_entries_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "time_entries_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
             referencedColumns: ["id"]
           },
         ]

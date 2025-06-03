@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { 
   Home, 
   Users, 
+  UserCheck,
   FolderOpen, 
   CheckSquare, 
   FileText, 
@@ -22,6 +23,7 @@ const Navigation = () => {
   const navItems = [
     { path: '/', label: 'Dashboard', icon: Home },
     ...(userRole === 'admin' ? [{ path: '/clients', label: 'Clients', icon: Users }] : []),
+    { path: '/employees', label: 'Employees', icon: UserCheck },
     { path: '/projects', label: 'Projects', icon: FolderOpen },
     { path: '/tasks', label: 'Tasks', icon: CheckSquare },
     { path: '/invoices', label: 'Invoices', icon: FileText },
