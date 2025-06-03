@@ -21,14 +21,17 @@ const Navigation = () => {
   const { signOut, userRole } = useAuth();
   const location = useLocation();
 
+  // Convert userRole to string to handle comparison properly
+  const roleString = userRole as string;
+
   const navItems = [
     { path: '/', label: 'Dashboard', icon: Home },
-    ...(userRole === 'admin' ? [{ path: '/clients', label: 'Clients', icon: Users }] : []),
+    ...(roleString === 'admin' ? [{ path: '/clients', label: 'Clients', icon: Users }] : []),
     { path: '/employees', label: 'Employees', icon: UserCheck },
     { path: '/projects', label: 'Projects', icon: FolderOpen },
     { path: '/tasks', label: 'Tasks', icon: CheckSquare },
-    ...(userRole === 'admin' || userRole === 'accountant' ? [{ path: '/invoices', label: 'Invoices', icon: FileText }] : []),
-    ...(userRole === 'admin' || userRole === 'accountant' ? [{ path: '/payments', label: 'Payments', icon: DollarSign }] : []),
+    ...(roleString === 'admin' || roleString === 'accountant' ? [{ path: '/invoices', label: 'Invoices', icon: FileText }] : []),
+    ...(roleString === 'admin' || roleString === 'accountant' ? [{ path: '/payments', label: 'Payments', icon: DollarSign }] : []),
     { path: '/services', label: 'Services', icon: Settings },
     { path: '/wages', label: 'Wages', icon: Wallet },
   ];

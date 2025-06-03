@@ -25,8 +25,13 @@ interface Employee {
 }
 
 interface EmployeeService {
+  employee_id: string;
   service_id: string;
-  services: { name: string };
+}
+
+interface Service {
+  id: string;
+  name: string;
 }
 
 const Employees = () => {
@@ -54,25 +59,34 @@ const Employees = () => {
     }
   });
 
-  // Get employee services for display - temporarily disabled until DB types are updated
+  // Get employee services - simplified query
   const { data: employeeServices = [] } = useQuery({
     queryKey: ['employee-services'],
     queryFn: async () => {
       try {
         const { data, error } = await supabase
-          .from('employee_services' as any)
-          .select(`
-            employee_id,
-            service_id,
-            services(name)
-          `);
+          .from('employee_services')
+          .select('employee_id, service_id');
         
         if (error) throw error;
-        return data as (EmployeeService & { employee_id: string })[];
+        return data as EmployeeService[];
       } catch (error) {
         console.log('Employee services query failed:', error);
         return [];
       }
+    }
+  });
+
+  // Get all services for mapping
+  const { data: services = [] } = useQuery({
+    queryKey: ['services'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('services')
+        .select('id, name');
+      
+      if (error) throw error;
+      return data as Service[];
     }
   });
 
@@ -95,7 +109,7 @@ const Employees = () => {
           }));
           
           const { error: servicesError } = await supabase
-            .from('employee_services' as any)
+            .from('employee_services')
             .insert(serviceInserts);
           
           if (servicesError) throw servicesError;
@@ -134,7 +148,7 @@ const Employees = () => {
       try {
         // First delete existing services
         await supabase
-          .from('employee_services' as any)
+          .from('employee_services')
           .delete()
           .eq('employee_id', id);
         
@@ -146,7 +160,7 @@ const Employees = () => {
           }));
           
           const { error: servicesError } = await supabase
-            .from('employee_services' as any)
+            .from('employee_services')
             .insert(serviceInserts);
           
           if (servicesError) throw servicesError;
@@ -232,10 +246,15 @@ const Employees = () => {
   };
 
   const getEmployeeServices = (employeeId: string) => {
-    return employeeServices
+    const empServiceIds = employeeServices
       .filter(es => es.employee_id === employeeId)
-      .map(es => es.services.name)
-      .join(', ') || 'None';
+      .map(es => es.service_id);
+    
+    const serviceNames = empServiceIds
+      .map(serviceId => services.find(s => s.id === serviceId)?.name)
+      .filter(Boolean);
+    
+    return serviceNames.join(', ') || 'None';
   };
 
   if (isLoading) {
