@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -67,9 +66,12 @@ interface TaskData {
 interface Project {
   id: string;
   name: string;
-  project_services?: {
-    service_id: string;
-  }[];
+}
+
+interface ProjectService {
+  id: string;
+  project_id: string;
+  service_id: string;
 }
 
 interface Employee {
@@ -125,21 +127,30 @@ const Tasks = () => {
     }
   });
 
-  // Fetch projects for dropdown - including project services
+  // Fetch projects for dropdown
   const { data: projects = [] } = useQuery({
     queryKey: ['projects'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('projects')
-        .select(`
-          id, 
-          name,
-          project_services(service_id)
-        `)
+        .select('id, name')
         .order('name');
       
       if (error) throw error;
       return data as Project[];
+    }
+  });
+
+  // Fetch project services separately
+  const { data: projectServices = [] } = useQuery({
+    queryKey: ['project-services'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('project_services')
+        .select('*');
+      
+      if (error) throw error;
+      return data as ProjectService[];
     }
   });
 
@@ -294,7 +305,7 @@ const Tasks = () => {
     
     // Filter by service through project services
     const matchesService = globalServiceFilter === 'all' || 
-      (projects.find(p => p.id === task.project_id)?.project_services?.some(ps => ps.service_id === globalServiceFilter));
+      projectServices.some(ps => ps.project_id === task.project_id && ps.service_id === globalServiceFilter);
     
     return matchesProject && matchesStatus && matchesAssignee && matchesAssigner && matchesSearch && matchesService;
   });
