@@ -400,6 +400,8 @@ export type Database = {
           assigner_id: string | null
           created_at: string
           date: string
+          deadline: string | null
+          estimated_duration: number | null
           hours: number
           id: string
           invoiced: boolean
@@ -414,6 +416,8 @@ export type Database = {
           assigner_id?: string | null
           created_at?: string
           date?: string
+          deadline?: string | null
+          estimated_duration?: number | null
           hours?: number
           id?: string
           invoiced?: boolean
@@ -428,6 +432,8 @@ export type Database = {
           assigner_id?: string | null
           created_at?: string
           date?: string
+          deadline?: string | null
+          estimated_duration?: number | null
           hours?: number
           id?: string
           invoiced?: boolean
@@ -551,7 +557,14 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "admin" | "client"
+      app_role:
+        | "admin"
+        | "client"
+        | "manager"
+        | "accountant"
+        | "employee"
+        | "associate"
+        | "teamlead"
       invoice_status: "Draft" | "Sent" | "Paid" | "Overdue"
       project_status: "Active" | "Completed" | "On Hold"
       project_type:
@@ -676,7 +689,15 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "client"],
+      app_role: [
+        "admin",
+        "client",
+        "manager",
+        "accountant",
+        "employee",
+        "associate",
+        "teamlead",
+      ],
       invoice_status: ["Draft", "Sent", "Paid", "Overdue"],
       project_status: ["Active", "Completed", "On Hold"],
       project_type: [
