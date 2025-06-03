@@ -26,18 +26,22 @@ import {
   Clock, 
   Calendar,
   FileText,
-  Users
+  Users,
+  Upload
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import Navigation from '@/components/Navigation';
 import { useToast } from '@/hooks/use-toast';
+import { logProjectActivity } from '@/utils/activityLogger';
 
 const Projects = () => {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<any>(null);
   const [projectBasis, setProjectBasis] = useState('Hourly');
+  const [brdFile, setBrdFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -82,19 +86,56 @@ const Projects = () => {
     }
   });
 
+  const uploadBrdFile = async (file: File, projectName: string) => {
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${projectName.replace(/\s+/g, '_')}_${Date.now()}.${fileExt}`;
+    const filePath = `brds/${fileName}`;
+
+    const { data, error } = await supabase.storage
+      .from('project-documents')
+      .upload(filePath, file);
+
+    if (error) throw error;
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('project-documents')
+      .getPublicUrl(filePath);
+
+    return publicUrl;
+  };
+
   const createProjectMutation = useMutation({
     mutationFn: async (projectData: any) => {
+      let brdFileUrl = '';
+      
+      if (projectBasis === 'BRD' && brdFile) {
+        setIsUploading(true);
+        try {
+          brdFileUrl = await uploadBrdFile(brdFile, projectData.name);
+        } catch (error) {
+          console.error('Error uploading BRD file:', error);
+          throw new Error('Failed to upload BRD file');
+        } finally {
+          setIsUploading(false);
+        }
+      }
+
       const { data, error } = await supabase
         .from('projects')
         .insert([{
           ...projectData,
           hourly_rate: projectBasis === 'Hourly' ? Number(projectData.hourly_rate) : 0,
-          project_amount: projectBasis === 'BRD' ? Number(projectData.project_amount) : 0
+          project_amount: projectBasis === 'BRD' ? Number(projectData.project_amount) : 0,
+          brd_file_url: brdFileUrl
         }])
         .select()
         .single();
       
       if (error) throw error;
+      
+      // Log project creation activity
+      await logProjectActivity(data.name, data.id, 'created');
+      
       return data;
     },
     onSuccess: () => {
@@ -109,7 +150,7 @@ const Projects = () => {
     onError: (error) => {
       toast({
         title: "Error",
-        description: "Failed to create project",
+        description: error.message || "Failed to create project",
         variant: "destructive",
       });
     }
@@ -117,19 +158,38 @@ const Projects = () => {
 
   const updateProjectMutation = useMutation({
     mutationFn: async ({ id, ...projectData }: any) => {
-      const isBRD = projectData.brd_file_url && projectData.brd_file_url.trim() !== '';
+      let brdFileUrl = projectData.brd_file_url;
+      
+      if (projectBasis === 'BRD' && brdFile) {
+        setIsUploading(true);
+        try {
+          brdFileUrl = await uploadBrdFile(brdFile, projectData.name);
+        } catch (error) {
+          console.error('Error uploading BRD file:', error);
+          throw new Error('Failed to upload BRD file');
+        } finally {
+          setIsUploading(false);
+        }
+      }
+
+      const isBRD = projectBasis === 'BRD';
       const { data, error } = await supabase
         .from('projects')
         .update({
           ...projectData,
           hourly_rate: isBRD ? 0 : Number(projectData.hourly_rate),
-          project_amount: isBRD ? Number(projectData.project_amount) : 0
+          project_amount: isBRD ? Number(projectData.project_amount) : 0,
+          brd_file_url: brdFileUrl
         })
         .eq('id', id)
         .select()
         .single();
       
       if (error) throw error;
+      
+      // Log project update activity
+      await logProjectActivity(data.name, data.id, 'updated');
+      
       return data;
     },
     onSuccess: () => {
@@ -144,7 +204,7 @@ const Projects = () => {
     onError: (error) => {
       toast({
         title: "Error",
-        description: "Failed to update project",
+        description: error.message || "Failed to update project",
         variant: "destructive",
       });
     }
@@ -163,6 +223,7 @@ const Projects = () => {
       brd_file_url: ''
     });
     setProjectBasis('Hourly');
+    setBrdFile(null);
     setEditingProject(null);
   };
 
@@ -190,6 +251,7 @@ const Projects = () => {
       status: project.status,
       brd_file_url: project.brd_file_url || ''
     });
+    setBrdFile(null);
     setIsEditDialogOpen(true);
   };
 
@@ -202,6 +264,29 @@ const Projects = () => {
         description: "BRD document not found for this project",
         variant: "destructive",
       });
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.type !== 'application/pdf') {
+        toast({
+          title: "Invalid File Type",
+          description: "Please upload a PDF file only",
+          variant: "destructive",
+        });
+        return;
+      }
+      if (file.size > 10 * 1024 * 1024) { // 10MB limit
+        toast({
+          title: "File Too Large",
+          description: "Please upload a file smaller than 10MB",
+          variant: "destructive",
+        });
+        return;
+      }
+      setBrdFile(file);
     }
   };
 
@@ -289,6 +374,7 @@ const Projects = () => {
                     value={projectBasis}
                     onValueChange={(value) => {
                       setProjectBasis(value);
+                      setBrdFile(null);
                       if (value === 'BRD') {
                         setFormData({ ...formData, hourly_rate: '0' });
                       } else {
@@ -319,15 +405,23 @@ const Projects = () => {
                       />
                     </div>
                     <div>
-                      <Label htmlFor="brd_file_url">BRD Document URL</Label>
-                      <Input
-                        id="brd_file_url"
-                        type="url"
-                        value={formData.brd_file_url}
-                        onChange={(e) => setFormData({ ...formData, brd_file_url: e.target.value })}
-                        placeholder="https://example.com/document.pdf"
-                        required
-                      />
+                      <Label htmlFor="brd_file">BRD Document (PDF)</Label>
+                      <div className="flex items-center space-x-2">
+                        <Input
+                          id="brd_file"
+                          type="file"
+                          accept=".pdf"
+                          onChange={handleFileChange}
+                          required
+                          className="flex-1"
+                        />
+                        <Upload className="h-4 w-4 text-gray-500" />
+                      </div>
+                      {brdFile && (
+                        <p className="text-sm text-green-600 mt-1">
+                          Selected: {brdFile.name}
+                        </p>
+                      )}
                     </div>
                   </>
                 ) : (
@@ -380,8 +474,12 @@ const Projects = () => {
                   </Select>
                 </div>
                 
-                <Button type="submit" className="w-full">
-                  Create Project
+                <Button 
+                  type="submit" 
+                  className="w-full" 
+                  disabled={createProjectMutation.isPending || isUploading}
+                >
+                  {createProjectMutation.isPending || isUploading ? 'Creating...' : 'Create Project'}
                 </Button>
               </form>
             </DialogContent>
@@ -520,6 +618,7 @@ const Projects = () => {
                   value={projectBasis}
                   onValueChange={(value) => {
                     setProjectBasis(value);
+                    setBrdFile(null);
                     if (value === 'BRD') {
                       setFormData({ ...formData, hourly_rate: '0' });
                     } else {
@@ -550,15 +649,27 @@ const Projects = () => {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="edit_brd_file_url">BRD Document URL</Label>
-                    <Input
-                      id="edit_brd_file_url"
-                      type="url"
-                      value={formData.brd_file_url}
-                      onChange={(e) => setFormData({ ...formData, brd_file_url: e.target.value })}
-                      placeholder="https://example.com/document.pdf"
-                      required
-                    />
+                    <Label htmlFor="edit_brd_file">BRD Document (PDF)</Label>
+                    <div className="flex items-center space-x-2">
+                      <Input
+                        id="edit_brd_file"
+                        type="file"
+                        accept=".pdf"
+                        onChange={handleFileChange}
+                        className="flex-1"
+                      />
+                      <Upload className="h-4 w-4 text-gray-500" />
+                    </div>
+                    {brdFile && (
+                      <p className="text-sm text-green-600 mt-1">
+                        New file selected: {brdFile.name}
+                      </p>
+                    )}
+                    {formData.brd_file_url && !brdFile && (
+                      <p className="text-sm text-gray-600 mt-1">
+                        Current BRD document exists
+                      </p>
+                    )}
                   </div>
                 </>
               ) : (
@@ -611,8 +722,12 @@ const Projects = () => {
                 </Select>
               </div>
               
-              <Button type="submit" className="w-full">
-                Update Project
+              <Button 
+                type="submit" 
+                className="w-full"
+                disabled={updateProjectMutation.isPending || isUploading}
+              >
+                {updateProjectMutation.isPending || isUploading ? 'Updating...' : 'Update Project'}
               </Button>
             </form>
           </DialogContent>
