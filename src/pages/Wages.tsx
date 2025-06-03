@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -36,12 +35,14 @@ interface TimeEntry {
   };
   employees: {
     name: string;
+    hourly_rate: number;
   };
 }
 
 interface Employee {
   id: string;
   name: string;
+  hourly_rate: number;
 }
 
 interface Service {
@@ -56,7 +57,7 @@ const Wages = () => {
   const [wageStatusFilter, setWageStatusFilter] = useState<string>('all');
   const queryClient = useQueryClient();
 
-  // Fetch time entries with project service type data
+  // Fetch time entries with employee hourly rate data
   const { data: timeEntries = [], isLoading } = useQuery({
     queryKey: ['time-entries', selectedEmployee, selectedMonth],
     queryFn: async () => {
@@ -78,7 +79,8 @@ const Wages = () => {
             )
           ),
           employees(
-            name
+            name,
+            hourly_rate
           )
         `)
         .gte('start_time', startDate)
@@ -106,7 +108,7 @@ const Wages = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('employees')
-        .select('*')
+        .select('id, name, hourly_rate')
         .order('name');
 
       if (error) {
@@ -151,15 +153,15 @@ const Wages = () => {
     }
   });
 
-  // Calculate wages from time entries
+  // Calculate wages from time entries using employee hourly rates
   const wageRecords = timeEntries.map(entry => ({
     id: entry.id,
     employee_id: entry.employee_id,
     task_id: entry.task_id,
     hours_worked: entry.duration_minutes ? entry.duration_minutes / 60 : 0,
-    hourly_rate: entry.tasks?.projects?.hourly_rate || 0,
-    wage_amount: entry.duration_minutes && entry.tasks?.projects?.hourly_rate ? 
-      (entry.duration_minutes / 60) * entry.tasks.projects.hourly_rate : 0,
+    hourly_rate: entry.employees?.hourly_rate || 0,
+    wage_amount: entry.duration_minutes && entry.employees?.hourly_rate ? 
+      (entry.duration_minutes / 60) * entry.employees.hourly_rate : 0,
     date: entry.start_time,
     wage_status: entry.tasks?.wage_status || 'wnotpaid',
     tasks: entry.tasks,
@@ -201,7 +203,7 @@ const Wages = () => {
         <div className="flex justify-between items-center mb-6">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Employee Wages</h1>
-            <p className="text-gray-600 mt-2">Track employee hours and calculate wages</p>
+            <p className="text-gray-600 mt-2">Track employee hours and calculate wages using employee hourly rates</p>
           </div>
           
           <div className="flex items-center space-x-4">
@@ -226,7 +228,7 @@ const Wages = () => {
                     <SelectItem value="all">All Employees</SelectItem>
                     {employees.map((employee) => (
                       <SelectItem key={employee.id} value={employee.id}>
-                        {employee.name}
+                        {employee.name} (₹{employee.hourly_rate}/hr)
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -336,7 +338,7 @@ const Wages = () => {
           <CardHeader>
             <CardTitle>Wage Records</CardTitle>
             <CardDescription>
-              Employee wage records for {format(selectedMonth, "MMMM yyyy")}
+              Employee wage records for {format(selectedMonth, "MMMM yyyy")} (calculated using individual employee hourly rates)
               {globalServiceFilter !== 'all' && ` filtered by ${globalServiceFilter} service type`}
               {wageStatusFilter !== 'all' && ` - ${wageStatusFilter === 'wpaid' ? 'Paid' : 'Not Paid'} wages`}
             </CardDescription>
@@ -351,7 +353,7 @@ const Wages = () => {
                   <TableHead>Service Type</TableHead>
                   <TableHead>Date</TableHead>
                   <TableHead>Hours</TableHead>
-                  <TableHead>Rate</TableHead>
+                  <TableHead>Employee Rate</TableHead>
                   <TableHead>Amount</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Actions</TableHead>

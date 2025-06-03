@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -21,6 +22,7 @@ interface Employee {
   email: string;
   contact_number: string | null;
   role: string;
+  hourly_rate: number;
   created_at: string;
   updated_at: string;
 }
@@ -45,7 +47,8 @@ const Employees = () => {
     name: '',
     email: '',
     contact_number: '',
-    role: 'associate'
+    role: 'associate',
+    hourly_rate: 0
   });
 
   // Fetch dynamic roles
@@ -147,7 +150,7 @@ const Employees = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['employees'] });
       queryClient.invalidateQueries({ queryKey: ['employee-services'] });
-      setNewEmployee({ name: '', email: '', contact_number: '', role: 'associate' });
+      setNewEmployee({ name: '', email: '', contact_number: '', role: 'associate', hourly_rate: 0 });
       setSelectedServices([]);
       setSendInviteEmail(true);
       setIsDialogOpen(false);
@@ -247,7 +250,8 @@ const Employees = () => {
       name: employee.name,
       email: employee.email,
       contact_number: employee.contact_number || '',
-      role: employee.role
+      role: employee.role,
+      hourly_rate: employee.hourly_rate
     });
     
     // Load employee services
@@ -267,7 +271,7 @@ const Employees = () => {
   };
 
   const resetForm = () => {
-    setNewEmployee({ name: '', email: '', contact_number: '', role: roles[0] || 'associate' });
+    setNewEmployee({ name: '', email: '', contact_number: '', role: roles[0] || 'associate', hourly_rate: 0 });
     setSelectedServices([]);
     setEditingEmployee(null);
     setSendInviteEmail(true);
@@ -351,6 +355,18 @@ const Employees = () => {
                   />
                 </div>
                 <div className="space-y-2">
+                  <Label htmlFor="hourly_rate">Hourly Rate (₹) *</Label>
+                  <Input
+                    id="hourly_rate"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={newEmployee.hourly_rate}
+                    onChange={(e) => setNewEmployee({...newEmployee, hourly_rate: parseFloat(e.target.value) || 0})}
+                    placeholder="Enter hourly rate"
+                  />
+                </div>
+                <div className="space-y-2">
                   <Label htmlFor="role">Role</Label>
                   <Select value={newEmployee.role} onValueChange={(value) => setNewEmployee({...newEmployee, role: value})}>
                     <SelectTrigger>
@@ -409,6 +425,7 @@ const Employees = () => {
                   <TableHead>Email</TableHead>
                   <TableHead>Contact</TableHead>
                   <TableHead>Role</TableHead>
+                  <TableHead>Hourly Rate</TableHead>
                   <TableHead>Services</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
@@ -422,6 +439,7 @@ const Employees = () => {
                     <TableCell>
                       <span className="capitalize">{employee.role}</span>
                     </TableCell>
+                    <TableCell>₹{employee.hourly_rate.toFixed(2)}</TableCell>
                     <TableCell className="max-w-48 truncate">
                       {getEmployeeServices(employee.id)}
                     </TableCell>

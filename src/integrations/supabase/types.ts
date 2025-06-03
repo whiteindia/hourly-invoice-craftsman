@@ -116,6 +116,7 @@ export type Database = {
           contact_number: string | null
           created_at: string
           email: string
+          hourly_rate: number
           id: string
           name: string
           role: string
@@ -125,6 +126,7 @@ export type Database = {
           contact_number?: string | null
           created_at?: string
           email: string
+          hourly_rate?: number
           id?: string
           name: string
           role?: string
@@ -134,6 +136,7 @@ export type Database = {
           contact_number?: string | null
           created_at?: string
           email?: string
+          hourly_rate?: number
           id?: string
           name?: string
           role?: string
