@@ -46,7 +46,8 @@ const Projects = () => {
   const [newProject, setNewProject] = useState({
     name: '',
     client_id: '',
-    type: 'Hourly' as ProjectType,
+    type: 'DevOps' as ProjectType,
+    billing_type: 'hourly' as 'hourly' | 'project',
     hourly_rate: 0,
     project_amount: 0,
     start_date: '',
@@ -54,6 +55,7 @@ const Projects = () => {
     brd_file: null as File | null
   });
   const [editingProject, setEditingProject] = useState<ProjectData | null>(null);
+  const [editBillingType, setEditBillingType] = useState<'hourly' | 'project'>('hourly');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [uploadingBRD, setUploadingBRD] = useState(false);
@@ -120,7 +122,7 @@ const Projects = () => {
       if (error) throw error;
       
       // Upload BRD file if provided
-      if (newProject.brd_file && projectData.type === 'BRD') {
+      if (newProject.brd_file && newProject.billing_type === 'project') {
         try {
           setUploadingBRD(true);
           const brdUrl = await uploadBRDFile(newProject.brd_file, data.id);
@@ -146,7 +148,8 @@ const Projects = () => {
       setNewProject({
         name: '',
         client_id: '',
-        type: 'Hourly',
+        type: 'DevOps',
+        billing_type: 'hourly',
         hourly_rate: 0,
         project_amount: 0,
         start_date: '',
@@ -165,7 +168,7 @@ const Projects = () => {
   const updateProjectMutation = useMutation({
     mutationFn: async ({ id, ...updates }: { id: string } & any) => {
       // Handle BRD file upload for edit
-      if (editBrdFile && editingProject?.type === 'BRD') {
+      if (editBrdFile && editBillingType === 'project') {
         try {
           setUploadingBRD(true);
           const brdUrl = await uploadBRDFile(editBrdFile, id);
@@ -226,9 +229,9 @@ const Projects = () => {
       client_id: newProject.client_id,
       type: newProject.type,
       hourly_rate: newProject.hourly_rate,
-      project_amount: newProject.type === 'BRD' ? newProject.project_amount : null,
+      project_amount: newProject.billing_type === 'project' ? newProject.project_amount : null,
       start_date: newProject.start_date || null,
-      deadline: newProject.type === 'BRD' && newProject.deadline ? newProject.deadline : null
+      deadline: newProject.billing_type === 'project' && newProject.deadline ? newProject.deadline : null
     };
     createProjectMutation.mutate(projectData);
   };
@@ -241,9 +244,9 @@ const Projects = () => {
         client_id: editingProject.client_id,
         type: editingProject.type,
         hourly_rate: editingProject.hourly_rate,
-        project_amount: editingProject.type === 'BRD' ? editingProject.project_amount : null,
+        project_amount: editBillingType === 'project' ? editingProject.project_amount : null,
         start_date: editingProject.start_date || null,
-        deadline: editingProject.type === 'BRD' && editingProject.deadline ? editingProject.deadline : null
+        deadline: editBillingType === 'project' && editingProject.deadline ? editingProject.deadline : null
       };
       updateProjectMutation.mutate(updates);
     }
@@ -255,6 +258,10 @@ const Projects = () => {
 
   const openBRDFile = (url: string) => {
     window.open(url, '_blank');
+  };
+
+  const isProjectBased = (project: ProjectData) => {
+    return project.project_amount !== null || project.brd_file_url !== null;
   };
 
   if (isLoading) {
@@ -322,13 +329,30 @@ const Projects = () => {
                       <SelectValue placeholder="Select project type" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Hourly">Hourly</SelectItem>
-                      <SelectItem value="BRD">BRD (Project-based)</SelectItem>
+                      <SelectItem value="DevOps">DevOps</SelectItem>
+                      <SelectItem value="Marketing">Marketing</SelectItem>
+                      <SelectItem value="Consulting">Consulting</SelectItem>
+                      <SelectItem value="Strategy">Strategy</SelectItem>
+                      <SelectItem value="Technical Writing">Technical Writing</SelectItem>
+                      <SelectItem value="BRD">BRD</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="billing_type">Billing Type</Label>
+                  <Select value={newProject.billing_type} onValueChange={(value) => setNewProject({ ...newProject, billing_type: value as 'hourly' | 'project' })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select billing type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="hourly">Hourly</SelectItem>
+                      <SelectItem value="project">Project-based</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 
-                {newProject.type === 'Hourly' && (
+                {newProject.billing_type === 'hourly' && (
                   <div className="space-y-2">
                     <Label htmlFor="hourly_rate">Hourly Rate (₹)</Label>
                     <Input
@@ -341,7 +365,7 @@ const Projects = () => {
                   </div>
                 )}
 
-                {newProject.type === 'BRD' && (
+                {newProject.billing_type === 'project' && (
                   <>
                     <div className="space-y-2">
                       <Label htmlFor="project_amount">Project Amount (₹)</Label>
@@ -407,6 +431,7 @@ const Projects = () => {
                   <TableHead>Name</TableHead>
                   <TableHead>Client</TableHead>
                   <TableHead>Type</TableHead>
+                  <TableHead>Billing</TableHead>
                   <TableHead>Rate/Amount</TableHead>
                   <TableHead>Total Hours</TableHead>
                   <TableHead>Status</TableHead>
@@ -421,12 +446,17 @@ const Projects = () => {
                     <TableCell className="font-medium">{project.name}</TableCell>
                     <TableCell>{project.clients?.name}</TableCell>
                     <TableCell>
-                      <Badge className={project.type === 'Hourly' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}>
+                      <Badge className="bg-purple-100 text-purple-800">
                         {project.type}
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      {project.type === 'Hourly' ? `₹${project.hourly_rate}/hr` : `₹${project.project_amount || 0}`}
+                      <Badge className={isProjectBased(project) ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'}>
+                        {isProjectBased(project) ? 'Project' : 'Hourly'}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {isProjectBased(project) ? `₹${project.project_amount || 0}` : `₹${project.hourly_rate}/hr`}
                     </TableCell>
                     <TableCell>{project.total_hours}</TableCell>
                     <TableCell>
@@ -462,6 +492,7 @@ const Projects = () => {
                           size="sm"
                           onClick={() => {
                             setEditingProject(project);
+                            setEditBillingType(isProjectBased(project) ? 'project' : 'hourly');
                             setIsEditDialogOpen(true);
                           }}
                         >
@@ -526,13 +557,30 @@ const Projects = () => {
                       <SelectValue placeholder="Select project type" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Hourly">Hourly</SelectItem>
-                      <SelectItem value="BRD">BRD (Project-based)</SelectItem>
+                      <SelectItem value="DevOps">DevOps</SelectItem>
+                      <SelectItem value="Marketing">Marketing</SelectItem>
+                      <SelectItem value="Consulting">Consulting</SelectItem>
+                      <SelectItem value="Strategy">Strategy</SelectItem>
+                      <SelectItem value="Technical Writing">Technical Writing</SelectItem>
+                      <SelectItem value="BRD">BRD</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit-billing-type">Billing Type</Label>
+                  <Select value={editBillingType} onValueChange={(value) => setEditBillingType(value as 'hourly' | 'project')}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select billing type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="hourly">Hourly</SelectItem>
+                      <SelectItem value="project">Project-based</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 
-                {editingProject.type === 'Hourly' && (
+                {editBillingType === 'hourly' && (
                   <div className="space-y-2">
                     <Label htmlFor="edit-hourly-rate">Hourly Rate (₹)</Label>
                     <Input
@@ -545,7 +593,7 @@ const Projects = () => {
                   </div>
                 )}
 
-                {editingProject.type === 'BRD' && (
+                {editBillingType === 'project' && (
                   <>
                     <div className="space-y-2">
                       <Label htmlFor="edit-project-amount">Project Amount (₹)</Label>
