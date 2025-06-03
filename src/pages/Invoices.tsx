@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -7,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Plus, FileText, Download, Eye, DollarSign } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -50,12 +50,70 @@ const Invoices = () => {
   const [newInvoice, setNewInvoice] = useState({
     client: '',
     project: '',
-    hours: '',
-    rate: '',
+    selectedTasks: [] as number[],
     description: ''
   });
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+
+  // Mock tasks data - in a real app, this would come from your database
+  const availableTasks = [
+    {
+      id: 1,
+      name: "Server Configuration",
+      project: "DevOps Infrastructure Setup",
+      client: "TechCorp Solutions",
+      hours: 4.5,
+      rate: 100,
+      status: "Completed",
+      date: "2024-01-15",
+      invoiced: false
+    },
+    {
+      id: 2,
+      name: "Database Setup",
+      project: "DevOps Infrastructure Setup",
+      client: "TechCorp Solutions",
+      hours: 6.0,
+      rate: 100,
+      status: "Completed",
+      date: "2024-01-16",
+      invoiced: false
+    },
+    {
+      id: 3,
+      name: "Market Research",
+      project: "Marketing Strategy Development",
+      client: "StartupXYZ",
+      hours: 3.0,
+      rate: 120,
+      status: "Completed",
+      date: "2024-01-14",
+      invoiced: false
+    },
+    {
+      id: 4,
+      name: "Strategy Documentation",
+      project: "Marketing Strategy Development",
+      client: "StartupXYZ",
+      hours: 4.5,
+      rate: 120,
+      status: "Completed",
+      date: "2024-01-15",
+      invoiced: false
+    },
+    {
+      id: 5,
+      name: "Process Documentation",
+      project: "Business Process Optimization",
+      client: "LocalBiz",
+      hours: 8.0,
+      rate: 100,
+      status: "Completed",
+      date: "2024-01-16",
+      invoiced: false
+    }
+  ];
 
   const clients = ["TechCorp Solutions", "StartupXYZ", "LocalBiz"];
   const projects = [
@@ -71,34 +129,70 @@ const Invoices = () => {
         ...newInvoice,
         project: projectName,
         client: project.client,
-        rate: project.rate.toString()
+        selectedTasks: []
       });
     }
   };
 
+  const handleTaskSelection = (taskId: number, checked: boolean) => {
+    if (checked) {
+      setNewInvoice({
+        ...newInvoice,
+        selectedTasks: [...newInvoice.selectedTasks, taskId]
+      });
+    } else {
+      setNewInvoice({
+        ...newInvoice,
+        selectedTasks: newInvoice.selectedTasks.filter(id => id !== taskId)
+      });
+    }
+  };
+
+  const getFilteredTasks = () => {
+    return availableTasks.filter(task => 
+      task.project === newInvoice.project && 
+      task.status === "Completed" && 
+      !task.invoiced
+    );
+  };
+
+  const getSelectedTasksTotal = () => {
+    const selectedTasks = availableTasks.filter(task => 
+      newInvoice.selectedTasks.includes(task.id)
+    );
+    const totalHours = selectedTasks.reduce((sum, task) => sum + task.hours, 0);
+    const totalAmount = selectedTasks.reduce((sum, task) => sum + (task.hours * task.rate), 0);
+    return { totalHours, totalAmount };
+  };
+
   const handleCreateInvoice = () => {
-    if (!newInvoice.client || !newInvoice.project || !newInvoice.hours || !newInvoice.rate) {
-      toast.error('Please fill in all required fields');
+    if (!newInvoice.client || !newInvoice.project || newInvoice.selectedTasks.length === 0) {
+      toast.error('Please select a project and at least one task');
       return;
     }
 
-    const hours = parseFloat(newInvoice.hours);
-    const rate = parseFloat(newInvoice.rate);
-    const amount = hours * rate;
+    const selectedTasks = availableTasks.filter(task => 
+      newInvoice.selectedTasks.includes(task.id)
+    );
+    
+    const totalHours = selectedTasks.reduce((sum, task) => sum + task.hours, 0);
+    const totalAmount = selectedTasks.reduce((sum, task) => sum + (task.hours * task.rate), 0);
+    const rate = selectedTasks.length > 0 ? selectedTasks[0].rate : 0;
 
     const invoice = {
       id: `INV-${String(invoices.length + 1).padStart(3, '0')}`,
-      ...newInvoice,
-      hours,
+      client: newInvoice.client,
+      project: newInvoice.project,
+      hours: totalHours,
       rate,
-      amount,
+      amount: totalAmount,
       status: "Draft",
       date: new Date().toISOString().split('T')[0],
       dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
     };
 
     setInvoices([...invoices, invoice]);
-    setNewInvoice({ client: '', project: '', hours: '', rate: '', description: '' });
+    setNewInvoice({ client: '', project: '', selectedTasks: [], description: '' });
     setIsDialogOpen(false);
     toast.success('Invoice created successfully!');
   };
@@ -146,11 +240,11 @@ const Invoices = () => {
                 Create Invoice
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-w-2xl">
               <DialogHeader>
                 <DialogTitle>Create New Invoice</DialogTitle>
                 <DialogDescription>
-                  Generate an invoice from project hours.
+                  Select completed tasks to generate an invoice.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
@@ -169,39 +263,62 @@ const Invoices = () => {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="hours">Hours Worked</Label>
-                  <Input
-                    id="hours"
-                    type="number"
-                    step="0.25"
-                    value={newInvoice.hours}
-                    onChange={(e) => setNewInvoice({...newInvoice, hours: e.target.value})}
-                    placeholder="0.0"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="rate">Hourly Rate ($)</Label>
-                  <Input
-                    id="rate"
-                    type="number"
-                    value={newInvoice.rate}
-                    onChange={(e) => setNewInvoice({...newInvoice, rate: e.target.value})}
-                    placeholder="100"
-                    readOnly={!!newInvoice.project}
-                  />
-                </div>
-                {newInvoice.hours && newInvoice.rate && (
-                  <div className="p-4 bg-gray-50 rounded-lg">
-                    <div className="flex justify-between items-center">
-                      <span className="font-medium">Total Amount:</span>
-                      <span className="text-2xl font-bold text-green-600">
-                        ${(parseFloat(newInvoice.hours) * parseFloat(newInvoice.rate)).toFixed(2)}
-                      </span>
+
+                {newInvoice.project && (
+                  <div className="space-y-2">
+                    <Label>Select Tasks to Invoice</Label>
+                    <div className="border rounded-lg p-4 max-h-60 overflow-y-auto">
+                      {getFilteredTasks().length === 0 ? (
+                        <p className="text-gray-500 text-sm">No completed tasks available for this project.</p>
+                      ) : (
+                        <div className="space-y-3">
+                          {getFilteredTasks().map((task) => (
+                            <div key={task.id} className="flex items-center space-x-3 p-2 hover:bg-gray-50 rounded">
+                              <Checkbox
+                                id={`task-${task.id}`}
+                                checked={newInvoice.selectedTasks.includes(task.id)}
+                                onCheckedChange={(checked) => handleTaskSelection(task.id, checked as boolean)}
+                              />
+                              <div className="flex-1">
+                                <label htmlFor={`task-${task.id}`} className="text-sm font-medium cursor-pointer">
+                                  {task.name}
+                                </label>
+                                <div className="text-xs text-gray-600">
+                                  {task.hours}h × ${task.rate}/hr = ${(task.hours * task.rate).toFixed(2)}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
-                <Button onClick={handleCreateInvoice} className="w-full">
+
+                {newInvoice.selectedTasks.length > 0 && (
+                  <div className="p-4 bg-gray-50 rounded-lg">
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="font-medium">Total Hours:</span>
+                        <span className="text-lg font-bold">
+                          {getSelectedTasksTotal().totalHours.toFixed(2)}h
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="font-medium">Total Amount:</span>
+                        <span className="text-2xl font-bold text-green-600">
+                          ${getSelectedTasksTotal().totalAmount.toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <Button 
+                  onClick={handleCreateInvoice} 
+                  className="w-full"
+                  disabled={newInvoice.selectedTasks.length === 0}
+                >
                   Create Invoice
                 </Button>
               </div>
