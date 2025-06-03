@@ -25,35 +25,41 @@ import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 
 const Navigation = () => {
-  const { signOut, userRole } = useAuth();
+  const { signOut, userRole, user } = useAuth();
   const location = useLocation();
 
   // Convert userRole to string to handle comparison properly
   const roleString = userRole as string;
+  
+  // Special handling for yugandhar@whiteindia.in - show everything
+  const isAdmin = user?.email === 'yugandhar@whiteindia.in' || roleString === 'admin';
+  const isManagerOrAbove = isAdmin || roleString === 'manager';
+
+  console.log('Navigation - user:', user?.email, 'userRole:', roleString, 'isAdmin:', isAdmin);
 
   const mainNavItems = [
     { path: '/', label: 'Dashboard', icon: Home },
-    // Projects - admin, managers can see projects; other roles have limited access
-    ...(roleString === 'admin' || roleString === 'manager' ? [{ path: '/projects', label: 'Projects', icon: FolderOpen }] : []),
+    // Projects - admin, managers can see projects; yugandhar@whiteindia.in can always see
+    ...(isManagerOrAbove ? [{ path: '/projects', label: 'Projects', icon: FolderOpen }] : []),
     // Tasks - everyone can see tasks (with role-based filtering in the component)
     { path: '/tasks', label: 'Tasks', icon: CheckSquare },
-    // Invoices - admin and accountant can see
-    ...(roleString === 'admin' || roleString === 'accountant' ? [{ path: '/invoices', label: 'Invoices', icon: FileText }] : []),
-    // Payments - admin and accountant can see
-    ...(roleString === 'admin' || roleString === 'accountant' ? [{ path: '/payments', label: 'Payments', icon: DollarSign }] : []),
+    // Invoices - admin and accountant can see; yugandhar@whiteindia.in can always see
+    ...(isAdmin || roleString === 'accountant' ? [{ path: '/invoices', label: 'Invoices', icon: FileText }] : []),
+    // Payments - admin and accountant can see; yugandhar@whiteindia.in can always see
+    ...(isAdmin || roleString === 'accountant' ? [{ path: '/payments', label: 'Payments', icon: DollarSign }] : []),
     // Wages - everyone can see
     { path: '/wages', label: 'Wages', icon: Wallet },
   ];
 
   const configItems = [
-    // Clients - only admin can see
-    ...(roleString === 'admin' ? [{ path: '/clients', label: 'Clients', icon: Users }] : []),
-    // Employees - admin and managers can see
-    ...(roleString === 'admin' || roleString === 'manager' ? [{ path: '/employees', label: 'Employees', icon: UserCheck }] : []),
+    // Clients - only admin can see; yugandhar@whiteindia.in can always see
+    ...(isAdmin ? [{ path: '/clients', label: 'Clients', icon: Users }] : []),
+    // Employees - admin and managers can see; yugandhar@whiteindia.in can always see
+    ...(isManagerOrAbove ? [{ path: '/employees', label: 'Employees', icon: UserCheck }] : []),
     // Services - moved to config
     { path: '/services', label: 'Services', icon: Settings },
-    // Roles - only admin can see
-    ...(roleString === 'admin' ? [{ path: '/roles', label: 'Roles', icon: UserCheck }] : []),
+    // Roles - only admin can see; yugandhar@whiteindia.in can always see
+    ...(isAdmin ? [{ path: '/roles', label: 'Roles', icon: UserCheck }] : []),
   ];
 
   const isActive = (path: string) => location.pathname === path;
@@ -87,52 +93,59 @@ const Navigation = () => {
                 );
               })}
               
-              {/* Config dropdown menu */}
-              <NavigationMenu>
-                <NavigationMenuList>
-                  <NavigationMenuItem>
-                    <NavigationMenuTrigger
-                      className={cn(
-                        "flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors h-auto",
-                        isConfigActive
-                          ? "bg-blue-100 text-blue-700"
-                          : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
-                      )}
-                    >
-                      <Settings className="h-4 w-4" />
-                      <span>Config</span>
-                    </NavigationMenuTrigger>
-                    <NavigationMenuContent>
-                      <div className="w-48 p-2 bg-white">
-                        {configItems.map((item) => {
-                          const Icon = item.icon;
-                          return (
-                            <Link
-                              key={item.path}
-                              to={item.path}
-                              className={cn(
-                                "flex items-center space-x-2 px-3 py-2 rounded-md text-sm transition-colors w-full",
-                                isActive(item.path)
-                                  ? "bg-blue-100 text-blue-700"
-                                  : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
-                              )}
-                            >
-                              <Icon className="h-4 w-4" />
-                              <span>{item.label}</span>
-                            </Link>
-                          );
-                        })}
-                      </div>
-                    </NavigationMenuContent>
-                  </NavigationMenuItem>
-                </NavigationMenuList>
-              </NavigationMenu>
+              {/* Config dropdown menu - only show if there are config items */}
+              {configItems.length > 0 && (
+                <NavigationMenu>
+                  <NavigationMenuList>
+                    <NavigationMenuItem>
+                      <NavigationMenuTrigger
+                        className={cn(
+                          "flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors h-auto",
+                          isConfigActive
+                            ? "bg-blue-100 text-blue-700"
+                            : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                        )}
+                      >
+                        <Settings className="h-4 w-4" />
+                        <span>Config</span>
+                      </NavigationMenuTrigger>
+                      <NavigationMenuContent>
+                        <div className="w-48 p-2 bg-white">
+                          {configItems.map((item) => {
+                            const Icon = item.icon;
+                            return (
+                              <Link
+                                key={item.path}
+                                to={item.path}
+                                className={cn(
+                                  "flex items-center space-x-2 px-3 py-2 rounded-md text-sm transition-colors w-full",
+                                  isActive(item.path)
+                                    ? "bg-blue-100 text-blue-700"
+                                    : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                                )}
+                              >
+                                <Icon className="h-4 w-4" />
+                                <span>{item.label}</span>
+                              </Link>
+                            );
+                          })}
+                        </div>
+                      </NavigationMenuContent>
+                    </NavigationMenuItem>
+                  </NavigationMenuList>
+                </NavigationMenu>
+              )}
             </div>
           </div>
-          <Button variant="outline" onClick={signOut}>
-            <LogOut className="h-4 w-4 mr-2" />
-            Sign Out
-          </Button>
+          <div className="flex items-center space-x-4">
+            <span className="text-sm text-gray-600">
+              {user?.email} {roleString && `(${roleString})`}
+            </span>
+            <Button variant="outline" onClick={signOut}>
+              <LogOut className="h-4 w-4 mr-2" />
+              Sign Out
+            </Button>
+          </div>
         </div>
       </div>
     </nav>

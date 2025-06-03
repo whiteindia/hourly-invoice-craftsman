@@ -18,10 +18,14 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import Navigation from '@/components/Navigation';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
 
 const Index = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user, userRole } = useAuth();
+
+  console.log('Dashboard - Current user:', user?.email, 'Role:', userRole);
 
   // Set up real-time subscription for activity feed
   useEffect(() => {
@@ -47,9 +51,10 @@ const Index = () => {
   }, [queryClient]);
 
   // Get running tasks (tasks with active time entries)
-  const { data: runningTasks = [] } = useQuery({
+  const { data: runningTasks = [], error: runningTasksError } = useQuery({
     queryKey: ['running-tasks'],
     queryFn: async () => {
+      console.log('Fetching running tasks...');
       const { data, error } = await supabase
         .from('time_entries')
         .select(`
@@ -67,15 +72,20 @@ const Index = () => {
         .is('end_time', null)
         .order('start_time', { ascending: false });
       
-      if (error) throw error;
+      if (error) {
+        console.error('Running tasks error:', error);
+        throw error;
+      }
+      console.log('Running tasks data:', data);
       return data || [];
     }
   });
 
   // Get summary statistics
-  const { data: stats } = useQuery({
+  const { data: stats, error: statsError } = useQuery({
     queryKey: ['dashboard-stats'],
     queryFn: async () => {
+      console.log('Fetching dashboard stats...');
       const [clientsRes, projectsRes, tasksRes, paymentsRes] = await Promise.all([
         supabase.from('clients').select('id', { count: 'exact' }),
         supabase.from('projects').select('id', { count: 'exact' }),
@@ -83,21 +93,37 @@ const Index = () => {
         supabase.from('payments').select('amount')
       ]);
 
+      console.log('Stats responses:', {
+        clients: clientsRes,
+        projects: projectsRes,
+        tasks: tasksRes,
+        payments: paymentsRes
+      });
+
+      if (clientsRes.error) console.error('Clients error:', clientsRes.error);
+      if (projectsRes.error) console.error('Projects error:', projectsRes.error);
+      if (tasksRes.error) console.error('Tasks error:', tasksRes.error);
+      if (paymentsRes.error) console.error('Payments error:', paymentsRes.error);
+
       const totalRevenue = paymentsRes.data?.reduce((sum, payment) => sum + payment.amount, 0) || 0;
 
-      return {
+      const result = {
         clients: clientsRes.count || 0,
         projects: projectsRes.count || 0,
         tasks: tasksRes.count || 0,
         revenue: totalRevenue
       };
+
+      console.log('Dashboard stats result:', result);
+      return result;
     }
   });
 
   // Get projects with upcoming deadlines (this week and next week)
-  const { data: upcomingProjects = [] } = useQuery({
+  const { data: upcomingProjects = [], error: upcomingProjectsError } = useQuery({
     queryKey: ['upcoming-projects'],
     queryFn: async () => {
+      console.log('Fetching upcoming projects...');
       const today = new Date();
       const nextWeek = new Date(today);
       nextWeek.setDate(today.getDate() + 14); // Next 2 weeks
@@ -123,7 +149,11 @@ const Index = () => {
         .order('deadline', { ascending: true })
         .limit(5);
       
-      if (error) throw error;
+      if (error) {
+        console.error('Upcoming projects error:', error);
+        throw error;
+      }
+      console.log('Upcoming projects data:', data);
       return data || [];
     }
   });
@@ -174,10 +204,13 @@ const Index = () => {
     }
   });
 
-  // Add some debugging logs
-  React.useEffect(() => {
-    console.log('Activity feed state:', { activityFeed, activityError, activityLoading });
-  }, [activityFeed, activityError, activityLoading]);
+  // Log all errors for debugging
+  useEffect(() => {
+    if (runningTasksError) console.error('Running tasks error:', runningTasksError);
+    if (statsError) console.error('Stats error:', statsError);
+    if (upcomingProjectsError) console.error('Upcoming projects error:', upcomingProjectsError);
+    if (activityError) console.error('Activity error:', activityError);
+  }, [runningTasksError, statsError, upcomingProjectsError, activityError]);
 
   const formatElapsedTime = (startTime: string) => {
     const start = new Date(startTime);
@@ -259,7 +292,31 @@ const Index = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+          <p className="text-gray-600 mt-2">Welcome, {user?.email} ({userRole})</p>
         </div>
+
+        {/* Debug info for yugandhar@whiteindia.in */}
+        {user?.email === 'yugandhar@whiteindia.in' && (
+          <Card className="mb-6 border-blue-200">
+            <CardHeader>
+              <CardTitle className="text-blue-700">Debug Info (Admin Only)</CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p><strong>User:</strong> {user?.email}</p>
+                  <p><strong>Role:</strong> {userRole}</p>
+                  <p><strong>Stats Errors:</strong> {statsError ? 'Yes' : 'No'}</p>
+                </div>
+                <div>
+                  <p><strong>Clients Count:</strong> {stats?.clients}</p>
+                  <p><strong>Projects Count:</strong> {stats?.projects}</p>
+                  <p><strong>Tasks Count:</strong> {stats?.tasks}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -270,6 +327,7 @@ const Index = () => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stats?.clients || 0}</div>
+              {statsError && <p className="text-xs text-red-500 mt-1">Error loading data</p>}
             </CardContent>
           </Card>
           
@@ -280,6 +338,7 @@ const Index = () => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stats?.projects || 0}</div>
+              {statsError && <p className="text-xs text-red-500 mt-1">Error loading data</p>}
             </CardContent>
           </Card>
           
@@ -290,6 +349,7 @@ const Index = () => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stats?.tasks || 0}</div>
+              {statsError && <p className="text-xs text-red-500 mt-1">Error loading data</p>}
             </CardContent>
           </Card>
           
@@ -300,6 +360,7 @@ const Index = () => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">${stats?.revenue || 0}</div>
+              {statsError && <p className="text-xs text-red-500 mt-1">Error loading data</p>}
             </CardContent>
           </Card>
         </div>
