@@ -371,6 +371,7 @@ export type Database = {
           project_id: string
           status: Database["public"]["Enums"]["task_status"]
           updated_at: string
+          wage_status: string | null
         }
         Insert: {
           assignee_id?: string | null
@@ -384,6 +385,7 @@ export type Database = {
           project_id: string
           status?: Database["public"]["Enums"]["task_status"]
           updated_at?: string
+          wage_status?: string | null
         }
         Update: {
           assignee_id?: string | null
@@ -397,6 +399,7 @@ export type Database = {
           project_id?: string
           status?: Database["public"]["Enums"]["task_status"]
           updated_at?: string
+          wage_status?: string | null
         }
         Relationships: [
           {
