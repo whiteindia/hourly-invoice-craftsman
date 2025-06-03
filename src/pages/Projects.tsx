@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Edit, Trash2, Upload, FileText, Eye } from 'lucide-react';
+import { Plus, Edit, Trash2, Upload, FileText, Eye, Filter } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -41,6 +41,11 @@ interface Client {
   name: string;
 }
 
+interface Service {
+  id: string;
+  name: string;
+}
+
 const Projects = () => {
   const queryClient = useQueryClient();
   const [newProject, setNewProject] = useState({
@@ -60,6 +65,14 @@ const Projects = () => {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [uploadingBRD, setUploadingBRD] = useState(false);
   const [editBrdFile, setEditBrdFile] = useState<File | null>(null);
+
+  // Filter states
+  const [selectedClient, setSelectedClient] = useState('all');
+  const [selectedStatus, setSelectedStatus] = useState('all');
+  const [selectedType, setSelectedType] = useState('all');
+  const [selectedYear, setSelectedYear] = useState('all');
+  const [selectedMonth, setSelectedMonth] = useState('all');
+  const [searchTerm, setSearchTerm] = useState('');
 
   // Fetch projects with client data
   const { data: projects = [], isLoading } = useQuery({
@@ -91,6 +104,44 @@ const Projects = () => {
       return data as Client[];
     }
   });
+
+  // Fetch services for filtering
+  const { data: services = [] } = useQuery({
+    queryKey: ['services'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('services')
+        .select('id, name')
+        .order('name');
+      
+      if (error) throw error;
+      return data as Service[];
+    }
+  });
+
+  // Filter projects based on selected filters
+  const filteredProjects = React.useMemo(() => {
+    return projects.filter(project => {
+      const matchesClient = selectedClient === 'all' || project.client_id === selectedClient;
+      const matchesStatus = selectedStatus === 'all' || project.status === selectedStatus;
+      const matchesType = selectedType === 'all' || project.type === selectedType;
+      const matchesSearch = project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           project.clients?.name.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      // Year and month filtering based on created_at
+      const projectDate = new Date(project.created_at);
+      const matchesYear = selectedYear === 'all' || projectDate.getFullYear().toString() === selectedYear;
+      const matchesMonth = selectedMonth === 'all' || (projectDate.getMonth() + 1).toString() === selectedMonth;
+      
+      return matchesClient && matchesStatus && matchesType && matchesSearch && matchesYear && matchesMonth;
+    });
+  }, [projects, selectedClient, selectedStatus, selectedType, selectedYear, selectedMonth, searchTerm]);
+
+  // Get unique years from projects
+  const availableYears = React.useMemo(() => {
+    const years = projects.map(project => new Date(project.created_at).getFullYear());
+    return [...new Set(years)].sort((a, b) => b - a);
+  }, [projects]);
 
   // Function to upload BRD file
   const uploadBRDFile = async (file: File, projectId: string) => {
@@ -264,6 +315,15 @@ const Projects = () => {
     return project.project_amount !== null || project.brd_file_url !== null;
   };
 
+  const clearFilters = () => {
+    setSelectedClient('all');
+    setSelectedStatus('all');
+    setSelectedType('all');
+    setSelectedYear('all');
+    setSelectedMonth('all');
+    setSearchTerm('');
+  };
+
   if (isLoading) {
     return (
       <Navigation>
@@ -429,12 +489,126 @@ const Projects = () => {
           </Dialog>
         </div>
 
+        {/* Filters Section */}
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Filter className="h-5 w-5" />
+              Filters
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-4">
+              <div className="space-y-2">
+                <Label>Search</Label>
+                <Input
+                  placeholder="Search projects or clients..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Client</Label>
+                <Select value={selectedClient} onValueChange={setSelectedClient}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All clients" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Clients</SelectItem>
+                    {clients.map((client) => (
+                      <SelectItem key={client.id} value={client.id}>
+                        {client.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Status</Label>
+                <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All statuses" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Statuses</SelectItem>
+                    <SelectItem value="Active">Active</SelectItem>
+                    <SelectItem value="Completed">Completed</SelectItem>
+                    <SelectItem value="On Hold">On Hold</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Type</Label>
+                <Select value={selectedType} onValueChange={setSelectedType}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All types" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Types</SelectItem>
+                    <SelectItem value="DevOps">DevOps</SelectItem>
+                    <SelectItem value="Marketing">Marketing</SelectItem>
+                    <SelectItem value="Consulting">Consulting</SelectItem>
+                    <SelectItem value="Strategy">Strategy</SelectItem>
+                    <SelectItem value="Technical Writing">Technical Writing</SelectItem>
+                    <SelectItem value="BRD">BRD</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Year</Label>
+                <Select value={selectedYear} onValueChange={setSelectedYear}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All years" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Years</SelectItem>
+                    {availableYears.map((year) => (
+                      <SelectItem key={year} value={year.toString()}>
+                        {year}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Month</Label>
+                <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All months" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Months</SelectItem>
+                    <SelectItem value="1">January</SelectItem>
+                    <SelectItem value="2">February</SelectItem>
+                    <SelectItem value="3">March</SelectItem>
+                    <SelectItem value="4">April</SelectItem>
+                    <SelectItem value="5">May</SelectItem>
+                    <SelectItem value="6">June</SelectItem>
+                    <SelectItem value="7">July</SelectItem>
+                    <SelectItem value="8">August</SelectItem>
+                    <SelectItem value="9">September</SelectItem>
+                    <SelectItem value="10">October</SelectItem>
+                    <SelectItem value="11">November</SelectItem>
+                    <SelectItem value="12">December</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <Button variant="outline" onClick={clearFilters} className="w-full md:w-auto">
+              Clear All Filters
+            </Button>
+          </CardContent>
+        </Card>
+
         {/* Projects List */}
         <Card>
           <CardHeader>
-            <CardTitle>Projects ({projects.length})</CardTitle>
+            <CardTitle>Projects ({filteredProjects.length})</CardTitle>
             <CardDescription>
-              All projects and their details
+              {filteredProjects.length !== projects.length 
+                ? `Showing ${filteredProjects.length} of ${projects.length} projects`
+                : `All projects and their details`
+              }
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -454,7 +628,7 @@ const Projects = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {projects.map((project) => (
+                {filteredProjects.map((project) => (
                   <TableRow key={project.id}>
                     <TableCell className="font-medium">{project.name}</TableCell>
                     <TableCell>{project.clients?.name}</TableCell>
