@@ -26,13 +26,21 @@ const Navigation = () => {
 
   const navItems = [
     { path: '/', label: 'Dashboard', icon: Home },
+    // Clients - only admin can see
     ...(roleString === 'admin' ? [{ path: '/clients', label: 'Clients', icon: Users }] : []),
-    { path: '/employees', label: 'Employees', icon: UserCheck },
-    { path: '/projects', label: 'Projects', icon: FolderOpen },
+    // Employees - admin and managers can see
+    ...(roleString === 'admin' || roleString === 'manager' ? [{ path: '/employees', label: 'Employees', icon: UserCheck }] : []),
+    // Projects - admin, managers can see projects; other roles have limited access
+    ...(roleString === 'admin' || roleString === 'manager' ? [{ path: '/projects', label: 'Projects', icon: FolderOpen }] : []),
+    // Tasks - everyone can see tasks (with role-based filtering in the component)
     { path: '/tasks', label: 'Tasks', icon: CheckSquare },
+    // Invoices - admin and accountant can see
     ...(roleString === 'admin' || roleString === 'accountant' ? [{ path: '/invoices', label: 'Invoices', icon: FileText }] : []),
+    // Payments - admin and accountant can see
     ...(roleString === 'admin' || roleString === 'accountant' ? [{ path: '/payments', label: 'Payments', icon: DollarSign }] : []),
+    // Services - everyone can see
     { path: '/services', label: 'Services', icon: Settings },
+    // Wages - everyone can see
     { path: '/wages', label: 'Wages', icon: Wallet },
   ];
 

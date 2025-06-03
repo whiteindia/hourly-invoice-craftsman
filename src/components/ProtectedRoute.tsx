@@ -9,9 +9,10 @@ type AppRole = Database['public']['Enums']['app_role'];
 interface ProtectedRouteProps {
   children: React.ReactNode;
   requiredRole?: AppRole;
+  allowedRoles?: AppRole[];
 }
 
-const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRole }) => {
+const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRole, allowedRoles }) => {
   const { user, userRole, loading } = useAuth();
 
   if (loading) {
@@ -26,7 +27,20 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRole 
     return <Navigate to="/login" replace />;
   }
 
-  if (requiredRole && userRole !== requiredRole) {
+  // Check role permissions
+  const hasAccess = () => {
+    if (requiredRole && userRole !== requiredRole) {
+      return false;
+    }
+    
+    if (allowedRoles && !allowedRoles.includes(userRole as AppRole)) {
+      return false;
+    }
+    
+    return true;
+  };
+
+  if (!hasAccess()) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
         <div className="text-center">

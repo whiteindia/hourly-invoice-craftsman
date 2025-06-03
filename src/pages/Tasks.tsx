@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -7,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { Plus, CheckCircle, Clock, Filter, FileText, History } from 'lucide-react';
+import { Plus, CheckCircle, Clock, Filter, FileText, History, Edit, Play } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -47,13 +48,16 @@ const Tasks = () => {
   const { user, userRole } = useAuth();
   const queryClient = useQueryClient();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
   const [filters, setFilters] = useState({
     client: '',
     project: '',
     status: '',
     billing: '',
-    assignee: ''
+    assignee: '',
+    assigner: ''
   });
   const [newTask, setNewTask] = useState({
     name: '',
@@ -61,6 +65,9 @@ const Tasks = () => {
     assignee_id: '',
     date: new Date().toISOString().split('T')[0]
   });
+
+  // Convert userRole to string for comparison
+  const roleString = userRole as string;
 
   // Get current user's employee ID for default assigner
   const { data: currentEmployee } = useQuery({
@@ -95,6 +102,12 @@ const Tasks = () => {
         `)
         .order('date', { ascending: false });
 
+      // Apply role-based filtering
+      if (roleString === 'employee' || roleString === 'associate') {
+        // Employees/associates can only see tasks assigned to them
+        query = query.eq('assignee_id', currentEmployee?.id);
+      }
+
       if (filters.project && filters.project !== 'all') {
         query = query.eq('project_id', filters.project);
       }
@@ -107,17 +120,21 @@ const Tasks = () => {
       if (filters.assignee && filters.assignee !== 'all') {
         query = query.eq('assignee_id', filters.assignee);
       }
+      if (filters.assigner && filters.assigner !== 'all') {
+        query = query.eq('assigner_id', filters.assigner);
+      }
 
       const { data, error } = await query;
       if (error) throw error;
       return data as Task[];
-    }
+    },
+    enabled: !!currentEmployee
   });
 
   const { data: projects = [] } = useQuery({
     queryKey: ['projects-for-tasks'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('projects')
         .select(`
           id,
@@ -126,10 +143,31 @@ const Tasks = () => {
         `)
         .eq('status', 'Active')
         .order('name');
+
+      // Role-based project filtering
+      if (roleString === 'manager') {
+        // Managers see projects assigned to them (you might need to add project assignment logic)
+        // For now, showing all active projects
+      } else if (roleString === 'employee' || roleString === 'associate') {
+        // Employees see projects they have tasks in
+        const { data: userTasks } = await supabase
+          .from('tasks')
+          .select('project_id')
+          .eq('assignee_id', currentEmployee?.id);
+        
+        if (userTasks && userTasks.length > 0) {
+          const projectIds = userTasks.map(t => t.project_id);
+          query = query.in('id', projectIds);
+        } else {
+          return [];
+        }
+      }
       
+      const { data, error } = await query;
       if (error) throw error;
       return data as Project[];
-    }
+    },
+    enabled: !!currentEmployee
   });
 
   const { data: employees = [] } = useQuery({
@@ -144,6 +182,12 @@ const Tasks = () => {
       return data as Employee[];
     }
   });
+
+  // Check if user can create tasks (admin, manager, team lead)
+  const canCreateTasks = ['admin', 'manager', 'teamlead'].includes(roleString);
+
+  // Check if user can see billing information
+  const canSeeBilling = ['admin', 'accountant'].includes(roleString);
 
   // Calculate total hours from time_entries
   const updateTaskHoursMutation = useMutation({
@@ -204,6 +248,29 @@ const Tasks = () => {
     }
   });
 
+  const updateTaskMutation = useMutation({
+    mutationFn: async ({ taskId, updates }: { taskId: string; updates: Partial<Task> }) => {
+      const { data, error } = await supabase
+        .from('tasks')
+        .update(updates)
+        .eq('id', taskId)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      setIsEditDialogOpen(false);
+      setEditingTask(null);
+      toast.success('Task updated successfully!');
+    },
+    onError: (error) => {
+      toast.error('Failed to update task: ' + error.message);
+    }
+  });
+
   const updateTaskStatusMutation = useMutation({
     mutationFn: async ({ taskId, status }: { taskId: string; status: 'Not Started' | 'In Progress' | 'Completed' }) => {
       const { data, error } = await supabase
@@ -233,6 +300,20 @@ const Tasks = () => {
     addTaskMutation.mutate(newTask);
   };
 
+  const handleEditTask = () => {
+    if (!editingTask) return;
+    
+    updateTaskMutation.mutate({
+      taskId: editingTask.id,
+      updates: {
+        name: editingTask.name,
+        project_id: editingTask.project_id,
+        assignee_id: editingTask.assignee_id,
+        date: editingTask.date
+      }
+    });
+  };
+
   const handleStatusChange = (taskId: string, newStatus: string) => {
     const status = newStatus as 'Not Started' | 'In Progress' | 'Completed';
     updateTaskStatusMutation.mutate({ taskId, status });
@@ -249,7 +330,7 @@ const Tasks = () => {
   };
 
   const clearFilters = () => {
-    setFilters({ client: '', project: '', status: '', billing: '', assignee: '' });
+    setFilters({ client: '', project: '', status: '', billing: '', assignee: '', assigner: '' });
   };
 
   const getStatusBadge = (status: string) => {
@@ -265,6 +346,11 @@ const Tasks = () => {
 
   const handleTimeTrackerUpdate = (taskId: string) => {
     updateTaskHoursMutation.mutate({ taskId });
+  };
+
+  const openEditDialog = (task: Task) => {
+    setEditingTask(task);
+    setIsEditDialogOpen(true);
   };
 
   if (isLoading) {
@@ -288,33 +374,107 @@ const Tasks = () => {
             <p className="text-gray-600 mt-2">Manage and track your project tasks</p>
           </div>
           
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="bg-blue-600 hover:bg-blue-700">
-                <Plus className="h-4 w-4 mr-2" />
-                Add Task
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Create New Task</DialogTitle>
-                <DialogDescription>
-                  Add a new task to track your work progress.
-                </DialogDescription>
-              </DialogHeader>
+          {canCreateTasks && (
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <DialogTrigger asChild>
+                <Button className="bg-blue-600 hover:bg-blue-700">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Task
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Create New Task</DialogTitle>
+                  <DialogDescription>
+                    Add a new task to track your work progress.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="taskName">Task Name</Label>
+                    <Input
+                      id="taskName"
+                      value={newTask.name}
+                      onChange={(e) => setNewTask({...newTask, name: e.target.value})}
+                      placeholder="Enter task name"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="project">Project</Label>
+                    <Select value={newTask.project_id} onValueChange={(value) => setNewTask({...newTask, project_id: value})}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a project" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {projects.map((project) => (
+                          <SelectItem key={project.id} value={project.id}>
+                            {project.name} - {project.clients.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="assignee">Assignee</Label>
+                    <Select value={newTask.assignee_id} onValueChange={(value) => setNewTask({...newTask, assignee_id: value})}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select assignee (optional)" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">No assignee</SelectItem>
+                        {employees.map((employee) => (
+                          <SelectItem key={employee.id} value={employee.id}>
+                            {employee.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="date">Date</Label>
+                    <Input
+                      id="date"
+                      type="date"
+                      value={newTask.date}
+                      onChange={(e) => setNewTask({...newTask, date: e.target.value})}
+                    />
+                  </div>
+                  <Button 
+                    onClick={handleAddTask} 
+                    className="w-full"
+                    disabled={addTaskMutation.isPending}
+                  >
+                    {addTaskMutation.isPending ? 'Creating...' : 'Create Task'}
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          )}
+        </div>
+
+        {/* Edit Task Dialog */}
+        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit Task</DialogTitle>
+              <DialogDescription>
+                Update the task details.
+              </DialogDescription>
+            </DialogHeader>
+            {editingTask && (
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="taskName">Task Name</Label>
+                  <Label htmlFor="editTaskName">Task Name</Label>
                   <Input
-                    id="taskName"
-                    value={newTask.name}
-                    onChange={(e) => setNewTask({...newTask, name: e.target.value})}
+                    id="editTaskName"
+                    value={editingTask.name}
+                    onChange={(e) => setEditingTask({...editingTask, name: e.target.value})}
                     placeholder="Enter task name"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="project">Project</Label>
-                  <Select value={newTask.project_id} onValueChange={(value) => setNewTask({...newTask, project_id: value})}>
+                  <Label htmlFor="editProject">Project</Label>
+                  <Select value={editingTask.project_id} onValueChange={(value) => setEditingTask({...editingTask, project_id: value})}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select a project" />
                     </SelectTrigger>
@@ -328,8 +488,8 @@ const Tasks = () => {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="assignee">Assignee</Label>
-                  <Select value={newTask.assignee_id} onValueChange={(value) => setNewTask({...newTask, assignee_id: value})}>
+                  <Label htmlFor="editAssignee">Assignee</Label>
+                  <Select value={editingTask.assignee_id || ''} onValueChange={(value) => setEditingTask({...editingTask, assignee_id: value || null})}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select assignee (optional)" />
                     </SelectTrigger>
@@ -344,25 +504,25 @@ const Tasks = () => {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="date">Date</Label>
+                  <Label htmlFor="editDate">Date</Label>
                   <Input
-                    id="date"
+                    id="editDate"
                     type="date"
-                    value={newTask.date}
-                    onChange={(e) => setNewTask({...newTask, date: e.target.value})}
+                    value={editingTask.date}
+                    onChange={(e) => setEditingTask({...editingTask, date: e.target.value})}
                   />
                 </div>
                 <Button 
-                  onClick={handleAddTask} 
+                  onClick={handleEditTask} 
                   className="w-full"
-                  disabled={addTaskMutation.isPending}
+                  disabled={updateTaskMutation.isPending}
                 >
-                  {addTaskMutation.isPending ? 'Creating...' : 'Create Task'}
+                  {updateTaskMutation.isPending ? 'Updating...' : 'Update Task'}
                 </Button>
               </div>
-            </DialogContent>
-          </Dialog>
-        </div>
+            )}
+          </DialogContent>
+        </Dialog>
 
         {/* Filters */}
         <Card className="mb-6">
@@ -373,7 +533,7 @@ const Tasks = () => {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
+            <div className="grid grid-cols-1 md:grid-cols-7 gap-4 items-end">
               <div className="space-y-2">
                 <Label>Client</Label>
                 <Select value={filters.client} onValueChange={(value) => setFilters({...filters, client: value})}>
@@ -423,6 +583,22 @@ const Tasks = () => {
                 </Select>
               </div>
               <div className="space-y-2">
+                <Label>Assigner</Label>
+                <Select value={filters.assigner} onValueChange={(value) => setFilters({...filters, assigner: value})}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All assigners" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All assigners</SelectItem>
+                    {employees.map((employee) => (
+                      <SelectItem key={employee.id} value={employee.id}>
+                        {employee.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
                 <Label>Status</Label>
                 <Select value={filters.status} onValueChange={(value) => setFilters({...filters, status: value})}>
                   <SelectTrigger>
@@ -436,19 +612,21 @@ const Tasks = () => {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
-                <Label>Billing</Label>
-                <Select value={filters.billing} onValueChange={(value) => setFilters({...filters, billing: value})}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="All tasks" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All tasks</SelectItem>
-                    <SelectItem value="billed">Billed</SelectItem>
-                    <SelectItem value="unbilled">Unbilled</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              {canSeeBilling && (
+                <div className="space-y-2">
+                  <Label>Billing</Label>
+                  <Select value={filters.billing} onValueChange={(value) => setFilters({...filters, billing: value})}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="All tasks" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All tasks</SelectItem>
+                      <SelectItem value="billed">Billed</SelectItem>
+                      <SelectItem value="unbilled">Unbilled</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <Button variant="outline" onClick={clearFilters}>
                 Clear Filters
               </Button>
@@ -474,7 +652,7 @@ const Tasks = () => {
                   <TableHead>Status</TableHead>
                   <TableHead>Hours</TableHead>
                   <TableHead>Date</TableHead>
-                  <TableHead>Billing</TableHead>
+                  {canSeeBilling && <TableHead>Billing</TableHead>}
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -504,24 +682,34 @@ const Tasks = () => {
                         </div>
                       </TableCell>
                       <TableCell>{task.date}</TableCell>
-                      <TableCell>
-                        <Badge variant={task.invoiced ? 'default' : 'secondary'}>
-                          {task.invoiced ? 'Billed' : 'Unbilled'}
-                        </Badge>
-                      </TableCell>
+                      {canSeeBilling && (
+                        <TableCell>
+                          <Badge variant={task.invoiced ? 'default' : 'secondary'}>
+                            {task.invoiced ? 'Billed' : 'Unbilled'}
+                          </Badge>
+                        </TableCell>
+                      )}
                       <TableCell>
                         <div className="flex space-x-2">
-                          <TimeTrackerWithComment 
-                            task={task} 
-                            onSuccess={() => handleTimeTrackerUpdate(task.id)} 
-                          />
+                          {task.status !== 'Completed' && (
+                            <TimeTrackerWithComment 
+                              task={task} 
+                              onSuccess={() => handleTimeTrackerUpdate(task.id)} 
+                            />
+                          )}
                           <Button
                             size="sm"
                             variant="outline"
                             onClick={() => toggleTaskExpansion(task.id)}
                           >
-                            <History className="h-4 w-4 mr-1" />
-                            History
+                            <History className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => openEditDialog(task)}
+                          >
+                            <Edit className="h-4 w-4" />
                           </Button>
                           <Select value={task.status} onValueChange={(value) => handleStatusChange(task.id, value)}>
                             <SelectTrigger className="w-32">
@@ -538,7 +726,7 @@ const Tasks = () => {
                     </TableRow>
                     {expandedTasks.has(task.id) && (
                       <TableRow>
-                        <TableCell colSpan={11} className="bg-gray-50">
+                        <TableCell colSpan={canSeeBilling ? 11 : 10} className="bg-gray-50">
                           <div className="p-4">
                             <TaskHistory 
                               taskId={task.id} 
@@ -554,7 +742,7 @@ const Tasks = () => {
             </Table>
             {tasks.length === 0 && (
               <div className="text-center py-8 text-gray-500">
-                No tasks found. Create your first task to get started.
+                No tasks found. {canCreateTasks ? 'Create your first task to get started.' : 'No tasks assigned to you.'}
               </div>
             )}
           </CardContent>

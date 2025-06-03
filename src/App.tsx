@@ -40,12 +40,12 @@ const App = () => (
               </ProtectedRoute>
             } />
             <Route path="/employees" element={
-              <ProtectedRoute>
+              <ProtectedRoute allowedRoles={["admin", "manager"]}>
                 <Employees />
               </ProtectedRoute>
             } />
             <Route path="/projects" element={
-              <ProtectedRoute>
+              <ProtectedRoute allowedRoles={["admin", "manager"]}>
                 <Projects />
               </ProtectedRoute>
             } />
@@ -55,12 +55,12 @@ const App = () => (
               </ProtectedRoute>
             } />
             <Route path="/invoices" element={
-              <ProtectedRoute>
+              <ProtectedRoute allowedRoles={["admin", "accountant"]}>
                 <Invoices />
               </ProtectedRoute>
             } />
             <Route path="/payments" element={
-              <ProtectedRoute>
+              <ProtectedRoute allowedRoles={["admin", "accountant"]}>
                 <Payments />
               </ProtectedRoute>
             } />
