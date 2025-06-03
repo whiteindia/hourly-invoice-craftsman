@@ -1,4 +1,3 @@
-
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -32,7 +31,7 @@ function App() {
               <Route
                 path="/"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedRoute pageName="dashboard">
                     <Index />
                   </ProtectedRoute>
                 }
@@ -40,7 +39,7 @@ function App() {
               <Route
                 path="/clients"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedRoute pageName="clients">
                     <Clients />
                   </ProtectedRoute>
                 }
@@ -48,7 +47,7 @@ function App() {
               <Route
                 path="/employees"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedRoute pageName="employees">
                     <Employees />
                   </ProtectedRoute>
                 }
@@ -56,7 +55,7 @@ function App() {
               <Route
                 path="/projects"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedRoute pageName="projects">
                     <Projects />
                   </ProtectedRoute>
                 }
@@ -64,7 +63,7 @@ function App() {
               <Route
                 path="/tasks"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedRoute pageName="tasks">
                     <Tasks />
                   </ProtectedRoute>
                 }
@@ -72,7 +71,7 @@ function App() {
               <Route
                 path="/invoices"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedRoute pageName="invoices">
                     <Invoices />
                   </ProtectedRoute>
                 }
@@ -80,7 +79,7 @@ function App() {
               <Route
                 path="/payments"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedRoute pageName="payments">
                     <Payments />
                   </ProtectedRoute>
                 }
@@ -88,7 +87,7 @@ function App() {
               <Route
                 path="/services"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedRoute pageName="services">
                     <Services />
                   </ProtectedRoute>
                 }
@@ -96,7 +95,7 @@ function App() {
               <Route
                 path="/wages"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedRoute pageName="wages">
                     <Wages />
                   </ProtectedRoute>
                 }
@@ -104,7 +103,7 @@ function App() {
               <Route
                 path="/roles"
                 element={
-                  <ProtectedRoute requiredRole="admin">
+                  <ProtectedRoute pageName="roles">
                     <Roles />
                   </ProtectedRoute>
                 }

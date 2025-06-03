@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -21,48 +22,60 @@ import {
   NavigationMenuTrigger,
 } from '@/components/ui/navigation-menu';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePrivileges } from '@/hooks/usePrivileges';
 import { cn } from '@/lib/utils';
 
 const Navigation = () => {
-  const { signOut, userRole, user } = useAuth();
+  const { signOut, user } = useAuth();
+  const { hasPageAccess, loading: privilegesLoading } = usePrivileges();
   const location = useLocation();
 
-  // Convert userRole to string to handle comparison properly
-  const roleString = userRole as string;
-  
-  // Special handling for yugandhar@whiteindia.in - show everything
-  const isAdmin = user?.email === 'yugandhar@whiteindia.in' || roleString === 'admin';
-  const isManagerOrAbove = isAdmin || roleString === 'manager';
-
-  console.log('Navigation - user:', user?.email, 'userRole:', roleString, 'isAdmin:', isAdmin);
-
   const mainNavItems = [
-    { path: '/', label: 'Dashboard', icon: Home },
-    // Projects - admin, managers can see projects; yugandhar@whiteindia.in can always see
-    ...(isManagerOrAbove ? [{ path: '/projects', label: 'Projects', icon: FolderOpen }] : []),
-    // Tasks - everyone can see tasks (with role-based filtering in the component)
-    { path: '/tasks', label: 'Tasks', icon: CheckSquare },
-    // Invoices - admin and accountant can see; yugandhar@whiteindia.in can always see
-    ...(isAdmin || roleString === 'accountant' ? [{ path: '/invoices', label: 'Invoices', icon: FileText }] : []),
-    // Payments - admin and accountant can see; yugandhar@whiteindia.in can always see
-    ...(isAdmin || roleString === 'accountant' ? [{ path: '/payments', label: 'Payments', icon: DollarSign }] : []),
-    // Wages - everyone can see
-    { path: '/wages', label: 'Wages', icon: Wallet },
+    { path: '/', label: 'Dashboard', icon: Home, pageName: 'dashboard' },
+    { path: '/projects', label: 'Projects', icon: FolderOpen, pageName: 'projects' },
+    { path: '/tasks', label: 'Tasks', icon: CheckSquare, pageName: 'tasks' },
+    { path: '/invoices', label: 'Invoices', icon: FileText, pageName: 'invoices' },
+    { path: '/payments', label: 'Payments', icon: DollarSign, pageName: 'payments' },
+    { path: '/wages', label: 'Wages', icon: Wallet, pageName: 'wages' },
   ];
 
   const configItems = [
-    // Clients - only admin can see; yugandhar@whiteindia.in can always see
-    ...(isAdmin ? [{ path: '/clients', label: 'Clients', icon: Users }] : []),
-    // Employees - admin and managers can see; yugandhar@whiteindia.in can always see
-    ...(isManagerOrAbove ? [{ path: '/employees', label: 'Employees', icon: UserCheck }] : []),
-    // Services - moved to config
-    { path: '/services', label: 'Services', icon: Settings },
-    // Roles - only admin can see; yugandhar@whiteindia.in can always see
-    ...(isAdmin ? [{ path: '/roles', label: 'Roles', icon: UserCheck }] : []),
+    { path: '/clients', label: 'Clients', icon: Users, pageName: 'clients' },
+    { path: '/employees', label: 'Employees', icon: UserCheck, pageName: 'employees' },
+    { path: '/services', label: 'Services', icon: Settings, pageName: 'services' },
+    { path: '/roles', label: 'Roles', icon: UserCheck, pageName: 'roles' },
   ];
 
+  // Filter items based on privileges
+  const visibleMainNavItems = mainNavItems.filter(item => {
+    // Always show dashboard
+    if (item.pageName === 'dashboard') return true;
+    // Check if user has read access to the page
+    return hasPageAccess(item.pageName);
+  });
+
+  const visibleConfigItems = configItems.filter(item => {
+    return hasPageAccess(item.pageName);
+  });
+
   const isActive = (path: string) => location.pathname === path;
-  const isConfigActive = configItems.some(item => isActive(item.path));
+  const isConfigActive = visibleConfigItems.some(item => isActive(item.path));
+
+  // Show loading state while privileges are being fetched
+  if (privilegesLoading) {
+    return (
+      <nav className="bg-white shadow-sm border-b sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <Link to="/" className="text-xl font-bold text-blue-600">
+              WhiteIndia
+            </Link>
+            <div className="text-sm text-gray-600">Loading...</div>
+          </div>
+        </div>
+      </nav>
+    );
+  }
 
   return (
     <nav className="bg-white shadow-sm border-b sticky top-0 z-50">
@@ -73,7 +86,7 @@ const Navigation = () => {
               WhiteIndia
             </Link>
             <div className="hidden md:flex items-center space-x-4">
-              {mainNavItems.map((item) => {
+              {visibleMainNavItems.map((item) => {
                 const Icon = item.icon;
                 return (
                   <Link
@@ -93,7 +106,7 @@ const Navigation = () => {
               })}
               
               {/* Config dropdown menu - only show if there are config items */}
-              {configItems.length > 0 && (
+              {visibleConfigItems.length > 0 && (
                 <NavigationMenu>
                   <NavigationMenuList>
                     <NavigationMenuItem>
@@ -110,7 +123,7 @@ const Navigation = () => {
                       </NavigationMenuTrigger>
                       <NavigationMenuContent>
                         <div className="w-48 p-2 bg-white">
-                          {configItems.map((item) => {
+                          {visibleConfigItems.map((item) => {
                             const Icon = item.icon;
                             return (
                               <Link
