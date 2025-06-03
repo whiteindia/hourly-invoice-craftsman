@@ -56,8 +56,37 @@ export const useInvitations = () => {
       
       if (error) throw error;
       
-      // TODO: Send email notification
-      console.log('Invitation created:', data);
+      // Send actual email notification
+      try {
+        const emailPayload = {
+          email: invitationData.email,
+          role: invitationData.role,
+          invitedBy: user.id,
+          ...(invitationData.role === 'client' ? {
+            clientData: invitationData.employee_data
+          } : {
+            employeeData: invitationData.employee_data
+          })
+        };
+
+        const { data: emailResponse, error: emailError } = await supabase.functions.invoke(
+          'send-invitation-email',
+          {
+            body: emailPayload
+          }
+        );
+
+        if (emailError) {
+          console.error('Failed to send invitation email:', emailError);
+          throw new Error('Failed to send invitation email: ' + emailError.message);
+        }
+
+        console.log('Invitation email sent successfully:', emailResponse);
+      } catch (emailError) {
+        console.error('Email sending error:', emailError);
+        // Don't throw here - invitation was created successfully, just email failed
+        console.log('Invitation created but email failed to send');
+      }
       
       return data;
     },
