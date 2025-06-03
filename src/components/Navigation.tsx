@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -139,7 +138,7 @@ const Navigation = () => {
           </div>
           <div className="flex items-center space-x-4">
             <span className="text-sm text-gray-600">
-              {user?.email} {roleString && `(${roleString})`}
+              {user?.email}
             </span>
             <Button variant="outline" onClick={signOut}>
               <LogOut className="h-4 w-4 mr-2" />

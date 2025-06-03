@@ -1,8 +1,8 @@
-
 import React, { useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { 
   DollarSign, 
   Users, 
@@ -293,7 +293,7 @@ const Index = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-gray-600 mt-2">Welcome, {user?.email} ({userRole})</p>
+          <p className="text-gray-600 mt-2">Welcome back!</p>
         </div>
 
         {/* Stats Cards */}
@@ -482,36 +482,38 @@ const Index = () => {
                   <p className="text-sm">Activity will appear here as team members work</p>
                 </div>
               ) : (
-                <div className="space-y-4">
-                  {activityFeed.map((activity: any) => (
-                    <div key={activity.id} className="p-3 border rounded-lg bg-gray-50">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center space-x-2 mb-1">
-                            <span className="text-lg">{getActivityIcon(activity.action_type)}</span>
-                            <p className="text-sm font-medium text-gray-900">
-                              {activity.profiles?.full_name || 'Unknown User'}
+                <ScrollArea className="h-96">
+                  <div className="space-y-4 pr-4">
+                    {activityFeed.map((activity: any) => (
+                      <div key={activity.id} className="p-3 border rounded-lg bg-gray-50">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-2 mb-1">
+                              <span className="text-lg">{getActivityIcon(activity.action_type)}</span>
+                              <p className="text-sm font-medium text-gray-900">
+                                {activity.profiles?.full_name || 'Unknown User'}
+                              </p>
+                            </div>
+                            <p className="text-sm text-gray-700">
+                              {activity.description}
                             </p>
+                            <p className="text-xs text-gray-600 mt-1">
+                              {activity.entity_type} • {activity.entity_name}
+                            </p>
+                            {activity.comment && (
+                              <p className="text-xs text-gray-500 mt-2 italic">
+                                "{activity.comment}"
+                              </p>
+                            )}
                           </div>
-                          <p className="text-sm text-gray-700">
-                            {activity.description}
-                          </p>
-                          <p className="text-xs text-gray-600 mt-1">
-                            {activity.entity_type} • {activity.entity_name}
-                          </p>
-                          {activity.comment && (
-                            <p className="text-xs text-gray-500 mt-2 italic">
-                              "{activity.comment}"
-                            </p>
-                          )}
+                          <span className="text-xs text-gray-400 ml-2">
+                            {formatActivityTime(activity.created_at)}
+                          </span>
                         </div>
-                        <span className="text-xs text-gray-400 ml-2">
-                          {formatActivityTime(activity.created_at)}
-                        </span>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                </ScrollArea>
               )}
             </CardContent>
           </Card>
