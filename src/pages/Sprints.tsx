@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -44,13 +43,17 @@ interface SprintWithTasks extends Sprint {
   tasks: Task[];
 }
 
-const SprintsContent = () => {
+const Sprints = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingSprint, setEditingSprint] = useState<Sprint | null>(null);
   const [selectedClient, setSelectedClient] = useState<string>('all');
   const [selectedProject, setSelectedProject] = useState<string>('all');
   const [selectedAssignee, setSelectedAssignee] = useState<string>('all');
   const [selectedAssigner, setSelectedAssigner] = useState<string>('all');
   const [selectedService, setSelectedService] = useState<string>('all');
+  const [selectedStatus, setSelectedStatus] = useState<string>('active'); // Hide completed by default
+  const [selectedYear, setSelectedYear] = useState<string>('all');
+  const [selectedMonth, setSelectedMonth] = useState<string>('all');
   const queryClient = useQueryClient();
 
   // Fetch clients for filter
@@ -66,20 +69,18 @@ const SprintsContent = () => {
     }
   });
 
-  // Fetch projects for filter
   const { data: projects = [] } = useQuery({
     queryKey: ['projects'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('projects')
-        .select('id, name')
+        .select('id, name, client_id')
         .order('name');
       if (error) throw error;
       return data || [];
     }
   });
 
-  // Fetch employees for filter
   const { data: employees = [] } = useQuery({
     queryKey: ['employees'],
     queryFn: async () => {
@@ -92,7 +93,6 @@ const SprintsContent = () => {
     }
   });
 
-  // Fetch services for filter
   const { data: services = [] } = useQuery({
     queryKey: ['services'],
     queryFn: async () => {
@@ -109,7 +109,6 @@ const SprintsContent = () => {
   const { data: sprints = [], isLoading } = useQuery({
     queryKey: ['sprints'],
     queryFn: async () => {
-      // Fetch sprints ordered by deadline (nearest first)
       const { data: sprintsData, error: sprintsError } = await supabase
         .from('sprints')
         .select('*')
@@ -117,7 +116,6 @@ const SprintsContent = () => {
 
       if (sprintsError) throw sprintsError;
 
-      // Fetch tasks for each sprint
       const sprintsWithTasks: SprintWithTasks[] = [];
       
       for (const sprint of sprintsData || []) {
@@ -145,7 +143,6 @@ const SprintsContent = () => {
 
         if (tasksError) throw tasksError;
 
-        // Process tasks and add employee data separately
         const tasks: Task[] = [];
         
         for (const st of sprintTasks || []) {
@@ -153,7 +150,6 @@ const SprintsContent = () => {
             const task = st.tasks as any;
             let employeeData = null;
             
-            // Fetch employee data if assignee_id exists
             if (task.assignee_id) {
               const { data: employee } = await supabase
                 .from('employees')
@@ -191,14 +187,46 @@ const SprintsContent = () => {
     }
   });
 
-  // Filter sprints based on selected filters
+  // Generate available years and months from sprints
+  const availableYears = [...new Set(sprints.map(sprint => new Date(sprint.deadline).getFullYear()))].sort((a, b) => b - a);
+  const months = [
+    { value: '0', label: 'January' }, { value: '1', label: 'February' }, { value: '2', label: 'March' },
+    { value: '3', label: 'April' }, { value: '4', label: 'May' }, { value: '5', label: 'June' },
+    { value: '6', label: 'July' }, { value: '7', label: 'August' }, { value: '8', label: 'September' },
+    { value: '9', label: 'October' }, { value: '10', label: 'November' }, { value: '11', label: 'December' }
+  ];
+
+  // Enhanced filter logic
   const filteredSprints = sprints.filter(sprint => {
+    // Status filter - by default hide completed sprints
+    if (selectedStatus === 'active' && sprint.status === 'Completed') {
+      return false;
+    }
+    if (selectedStatus !== 'all' && selectedStatus !== 'active' && sprint.status !== selectedStatus) {
+      return false;
+    }
+
+    // Year filter
+    if (selectedYear !== 'all') {
+      const sprintYear = new Date(sprint.deadline).getFullYear();
+      if (sprintYear !== parseInt(selectedYear)) {
+        return false;
+      }
+    }
+
+    // Month filter
+    if (selectedMonth !== 'all') {
+      const sprintMonth = new Date(sprint.deadline).getMonth();
+      if (sprintMonth !== parseInt(selectedMonth)) {
+        return false;
+      }
+    }
+
     if (sprint.tasks.length === 0) {
       return selectedClient === 'all' && selectedProject === 'all' && selectedAssignee === 'all' && selectedAssigner === 'all' && selectedService === 'all';
     }
 
     return sprint.tasks.some(task => {
-      // Filter by client
       if (selectedClient !== 'all') {
         const clientName = clients.find(c => c.id === selectedClient)?.name;
         if (task.projects?.clients?.name !== clientName) {
@@ -206,14 +234,12 @@ const SprintsContent = () => {
         }
       }
 
-      // Filter by project
       if (selectedProject !== 'all') {
         if (task.project_id !== selectedProject) {
           return false;
         }
       }
 
-      // Filter by assignee
       if (selectedAssignee !== 'all') {
         if (task.assignee_id !== selectedAssignee) {
           return false;
@@ -222,6 +248,41 @@ const SprintsContent = () => {
 
       return true;
     });
+  });
+
+  // Delete sprint mutation
+  const deleteSprint = useMutation({
+    mutationFn: async (sprintId: string) => {
+      // First delete sprint_tasks relationships
+      const { error: sprintTasksError } = await supabase
+        .from('sprint_tasks')
+        .delete()
+        .eq('sprint_id', sprintId);
+      
+      if (sprintTasksError) throw sprintTasksError;
+
+      // Then delete the sprint
+      const { error } = await supabase
+        .from('sprints')
+        .delete()
+        .eq('id', sprintId);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sprints'] });
+      toast({
+        title: "Success",
+        description: "Sprint deleted successfully",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to delete sprint",
+        variant: "destructive",
+      });
+    }
   });
 
   // Update task status mutation
@@ -250,7 +311,6 @@ const SprintsContent = () => {
     }
   });
 
-  // Update sprint status based on tasks
   const updateSprintStatus = useMutation({
     mutationFn: async ({ sprintId, status }: { sprintId: string; status: string }) => {
       const { error } = await supabase
@@ -268,7 +328,6 @@ const SprintsContent = () => {
   const handleTaskStatusChange = (taskId: string, newStatus: 'Not Started' | 'In Progress' | 'Completed', sprintId: string) => {
     updateTaskStatus.mutate({ taskId, status: newStatus });
     
-    // Update sprint status based on task statuses
     const sprint = sprints.find(s => s.id === sprintId);
     if (sprint) {
       const updatedTasks = sprint.tasks.map(t => 
@@ -285,6 +344,17 @@ const SprintsContent = () => {
       if (sprintStatus !== sprint.status) {
         updateSprintStatus.mutate({ sprintId, status: sprintStatus });
       }
+    }
+  };
+
+  const handleEditSprint = (sprint: Sprint) => {
+    setEditingSprint(sprint);
+    setDialogOpen(true);
+  };
+
+  const handleDeleteSprint = (sprintId: string) => {
+    if (confirm('Are you sure you want to delete this sprint? This action cannot be undone.')) {
+      deleteSprint.mutate(sprintId);
     }
   };
 
@@ -316,209 +386,262 @@ const SprintsContent = () => {
     setSelectedAssignee('all');
     setSelectedAssigner('all');
     setSelectedService('all');
+    setSelectedStatus('active');
+    setSelectedYear('all');
+    setSelectedMonth('all');
   };
 
-  const hasActiveFilters = selectedClient !== 'all' || selectedProject !== 'all' || selectedAssignee !== 'all' || selectedAssigner !== 'all' || selectedService !== 'all';
+  const hasActiveFilters = selectedClient !== 'all' || selectedProject !== 'all' || selectedAssignee !== 'all' || selectedAssigner !== 'all' || selectedService !== 'all' || selectedStatus !== 'active' || selectedYear !== 'all' || selectedMonth !== 'all';
 
   if (isLoading) {
     return (
-      <div className="container mx-auto p-6">
-        <div className="flex justify-center items-center h-64">
-          <div className="text-lg">Loading sprints...</div>
+      <Navigation>
+        <div className="container mx-auto p-6">
+          <div className="flex justify-center items-center h-64">
+            <div className="text-lg">Loading sprints...</div>
+          </div>
         </div>
-      </div>
+      </Navigation>
     );
   }
 
   return (
-    <div className="container mx-auto p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">Sprints</h1>
-        <Button onClick={() => setDialogOpen(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          Create Sprint
-        </Button>
-      </div>
+    <Navigation>
+      <div className="container mx-auto p-6">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-3xl font-bold">Sprints</h1>
+          <Button onClick={() => {
+            setEditingSprint(null);
+            setDialogOpen(true);
+          }}>
+            <Plus className="h-4 w-4 mr-2" />
+            Create Sprint
+          </Button>
+        </div>
 
-      {/* Global Filters */}
-      <Card className="mb-6">
-        <CardHeader>
-          <div className="flex justify-between items-center">
-            <CardTitle>Filters</CardTitle>
-            {hasActiveFilters && (
-              <Button variant="outline" size="sm" onClick={resetFilters}>
-                Clear Filters
-              </Button>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-2">Client</label>
-              <Select value={selectedClient} onValueChange={setSelectedClient}>
-                <SelectTrigger>
-                  <SelectValue placeholder="All Clients" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Clients</SelectItem>
-                  {clients.map((client) => (
-                    <SelectItem key={client.id} value={client.id}>
-                      {client.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-2">Project</label>
-              <Select value={selectedProject} onValueChange={setSelectedProject}>
-                <SelectTrigger>
-                  <SelectValue placeholder="All Projects" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Projects</SelectItem>
-                  {projects.map((project) => (
-                    <SelectItem key={project.id} value={project.id}>
-                      {project.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-2">Assignee</label>
-              <Select value={selectedAssignee} onValueChange={setSelectedAssignee}>
-                <SelectTrigger>
-                  <SelectValue placeholder="All Assignees" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Assignees</SelectItem>
-                  {employees.map((employee) => (
-                    <SelectItem key={employee.id} value={employee.id}>
-                      {employee.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-2">Assigner</label>
-              <Select value={selectedAssigner} onValueChange={setSelectedAssigner}>
-                <SelectTrigger>
-                  <SelectValue placeholder="All Assigners" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Assigners</SelectItem>
-                  {employees.map((employee) => (
-                    <SelectItem key={employee.id} value={employee.id}>
-                      {employee.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-2">Service</label>
-              <Select value={selectedService} onValueChange={setSelectedService}>
-                <SelectTrigger>
-                  <SelectValue placeholder="All Services" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Services</SelectItem>
-                  {services.map((service) => (
-                    <SelectItem key={service.id} value={service.id}>
-                      {service.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          
-          {hasActiveFilters && (
-            <div className="mt-4 flex flex-wrap gap-2">
-              {selectedClient !== 'all' && (
-                <Badge variant="secondary">
-                  Client: {clients.find(c => c.id === selectedClient)?.name}
-                </Badge>
-              )}
-              {selectedProject !== 'all' && (
-                <Badge variant="secondary">
-                  Project: {projects.find(p => p.id === selectedProject)?.name}
-                </Badge>
-              )}
-              {selectedAssignee !== 'all' && (
-                <Badge variant="secondary">
-                  Assignee: {employees.find(e => e.id === selectedAssignee)?.name}
-                </Badge>
-              )}
-              {selectedAssigner !== 'all' && (
-                <Badge variant="secondary">
-                  Assigner: {employees.find(e => e.id === selectedAssigner)?.name}
-                </Badge>
-              )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <div className="space-y-6">
-        {filteredSprints.length === 0 ? (
-          <Card>
-            <CardContent className="flex flex-col items-center justify-center py-12">
-              <Calendar className="h-12 w-12 text-gray-400 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No sprints found</h3>
-              <p className="text-gray-500 text-center mb-4">
-                {sprints.length === 0 
-                  ? "Get started by creating your first sprint to organize your tasks."
-                  : "No sprints match the current filters. Try adjusting your filter criteria."
-                }
-              </p>
+        <Card className="mb-6">
+          <CardHeader>
+            <div className="flex justify-between items-center">
+              <CardTitle>Filters</CardTitle>
               {hasActiveFilters && (
-                <Button variant="outline" onClick={resetFilters} className="mb-4">
+                <Button variant="outline" size="sm" onClick={resetFilters}>
                   Clear Filters
                 </Button>
               )}
-              <Button onClick={() => setDialogOpen(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Create Sprint
-              </Button>
-            </CardContent>
-          </Card>
-        ) : (
-          filteredSprints.map((sprint) => (
-            <SprintCard
-              key={sprint.id}
-              sprint={sprint}
-              onTaskStatusChange={handleTaskStatusChange}
-              getStatusIcon={getStatusIcon}
-              getStatusColor={getStatusColor}
-            />
-          ))
-        )}
+            </div>
+          </CardHeader>
+          <CardContent>
+            {/* First row - Date and Status filters */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">Status</label>
+                <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Sprint Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Sprints</SelectItem>
+                    <SelectItem value="active">Active Sprints (Hide Completed)</SelectItem>
+                    <SelectItem value="Not Started">Not Started</SelectItem>
+                    <SelectItem value="In Progress">In Progress</SelectItem>
+                    <SelectItem value="Completed">Completed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Year</label>
+                <Select value={selectedYear} onValueChange={setSelectedYear}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All Years" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Years</SelectItem>
+                    {availableYears.map((year) => (
+                      <SelectItem key={year} value={year.toString()}>
+                        {year}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Month</label>
+                <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All Months" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Months</SelectItem>
+                    {months.map((month) => (
+                      <SelectItem key={month.value} value={month.value}>
+                        {month.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Second row - Task-based filters */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">Client</label>
+                <Select value={selectedClient} onValueChange={setSelectedClient}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All Clients" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Clients</SelectItem>
+                    {clients.map((client) => (
+                      <SelectItem key={client.id} value={client.id}>
+                        {client.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Project</label>
+                <Select value={selectedProject} onValueChange={setSelectedProject}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All Projects" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Projects</SelectItem>
+                    {projects.map((project) => (
+                      <SelectItem key={project.id} value={project.id}>
+                        {project.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Assignee</label>
+                <Select value={selectedAssignee} onValueChange={setSelectedAssignee}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All Assignees" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Assignees</SelectItem>
+                    {employees.map((employee) => (
+                      <SelectItem key={employee.id} value={employee.id}>
+                        {employee.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Service</label>
+                <Select value={selectedService} onValueChange={setSelectedService}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All Services" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Services</SelectItem>
+                    {services.map((service) => (
+                      <SelectItem key={service.id} value={service.id}>
+                        {service.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            
+            {hasActiveFilters && (
+              <div className="mt-4 flex flex-wrap gap-2">
+                {selectedStatus !== 'active' && (
+                  <Badge variant="secondary">
+                    Status: {selectedStatus === 'all' ? 'All' : selectedStatus}
+                  </Badge>
+                )}
+                {selectedYear !== 'all' && (
+                  <Badge variant="secondary">Year: {selectedYear}</Badge>
+                )}
+                {selectedMonth !== 'all' && (
+                  <Badge variant="secondary">
+                    Month: {months.find(m => m.value === selectedMonth)?.label}
+                  </Badge>
+                )}
+                {selectedClient !== 'all' && (
+                  <Badge variant="secondary">
+                    Client: {clients.find(c => c.id === selectedClient)?.name}
+                  </Badge>
+                )}
+                {selectedProject !== 'all' && (
+                  <Badge variant="secondary">
+                    Project: {projects.find(p => p.id === selectedProject)?.name}
+                  </Badge>
+                )}
+                {selectedAssignee !== 'all' && (
+                  <Badge variant="secondary">
+                    Assignee: {employees.find(e => e.id === selectedAssignee)?.name}
+                  </Badge>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <div className="space-y-6">
+          {filteredSprints.length === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <Calendar className="h-12 w-12 text-gray-400 mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No sprints found</h3>
+                <p className="text-gray-500 text-center mb-4">
+                  {sprints.length === 0 
+                    ? "Get started by creating your first sprint to organize your tasks."
+                    : "No sprints match the current filters. Try adjusting your filter criteria."
+                  }
+                </p>
+                {hasActiveFilters && (
+                  <Button variant="outline" onClick={resetFilters} className="mb-4">
+                    Clear Filters
+                  </Button>
+                )}
+                <Button onClick={() => {
+                  setEditingSprint(null);
+                  setDialogOpen(true);
+                }}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create Sprint
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            filteredSprints.map((sprint) => (
+              <SprintCard
+                key={sprint.id}
+                sprint={sprint}
+                onTaskStatusChange={handleTaskStatusChange}
+                onEdit={() => handleEditSprint(sprint)}
+                onDelete={() => handleDeleteSprint(sprint.id)}
+                getStatusIcon={getStatusIcon}
+                getStatusColor={getStatusColor}
+              />
+            ))
+          )}
+        </div>
+
+        <SprintDialog
+          open={dialogOpen}
+          onOpenChange={setDialogOpen}
+          editingSprint={editingSprint}
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ['sprints'] });
+            setDialogOpen(false);
+            setEditingSprint(null);
+          }}
+        />
       </div>
-
-      <SprintDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        onSuccess={() => {
-          queryClient.invalidateQueries({ queryKey: ['sprints'] });
-          setDialogOpen(false);
-        }}
-      />
-    </div>
-  );
-};
-
-const Sprints = () => {
-  return (
-    <Navigation>
-      <SprintsContent />
     </Navigation>
   );
 };
