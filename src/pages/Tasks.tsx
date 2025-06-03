@@ -620,11 +620,17 @@ const Tasks = () => {
 
         <TaskCommentDialog
           isOpen={isCommentDialogOpen}
-          onClose={() => {
-            setIsCommentDialogOpen(false);
-            setSelectedTaskForComment(null);
+          onOpenChange={(open) => {
+            setIsCommentDialogOpen(open);
+            if (!open) {
+              setSelectedTaskForComment(null);
+            }
           }}
           task={selectedTaskForComment}
+          onSuccess={() => {
+            // Refresh tasks when comment is added successfully
+            queryClient.invalidateQueries({ queryKey: ['tasks'] });
+          }}
         />
       </div>
     </Navigation>
