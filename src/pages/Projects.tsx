@@ -24,9 +24,13 @@ interface ProjectData {
   start_date: string | null;
   deadline: string | null;
   brd_file_url: string | null;
+  assignee_id: string | null;
   created_at: string;
   clients: {
     name: string;
+  };
+  assignee?: {
+    full_name: string;
   };
 }
 
@@ -40,6 +44,12 @@ interface Service {
   name: string;
 }
 
+interface Assignee {
+  id: string;
+  full_name: string;
+  email: string;
+}
+
 const Projects = () => {
   const [newProject, setNewProject] = useState({
     name: '',
@@ -50,6 +60,7 @@ const Projects = () => {
     project_amount: 0,
     start_date: '',
     deadline: '',
+    assignee_id: '',
     brd_file: null as File | null
   });
   const [editingProject, setEditingProject] = useState<ProjectData | null>(null);
@@ -69,7 +80,7 @@ const Projects = () => {
 
   const { createProjectMutation, updateProjectMutation, deleteProjectMutation } = useProjectOperations();
 
-  // Fetch projects with client data
+  // Fetch projects with client and assignee data
   const { data: projects = [], isLoading } = useQuery({
     queryKey: ['projects'],
     queryFn: async () => {
@@ -77,7 +88,8 @@ const Projects = () => {
         .from('projects')
         .select(`
           *,
-          clients(name)
+          clients(name),
+          assignee:profiles!assignee_id(full_name)
         `)
         .order('created_at', { ascending: false });
       
@@ -114,6 +126,30 @@ const Projects = () => {
     }
   });
 
+  // Fetch assignees (admin users and managers)
+  const { data: assignees = [] } = useQuery({
+    queryKey: ['assignees'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select(`
+          id,
+          full_name,
+          email,
+          user_roles!inner(role)
+        `)
+        .in('user_roles.role', ['admin', 'manager'])
+        .order('full_name');
+      
+      if (error) throw error;
+      return data.map(profile => ({
+        id: profile.id,
+        full_name: profile.full_name || profile.email,
+        email: profile.email
+      })) as Assignee[];
+    }
+  });
+
   // Filter projects based on selected filters
   const filteredProjects = React.useMemo(() => {
     return projects.filter(project => {
@@ -146,7 +182,8 @@ const Projects = () => {
       hourly_rate: newProject.type === 'BRD' ? 0 : newProject.hourly_rate,
       project_amount: newProject.billing_type === 'project' || newProject.type === 'BRD' ? newProject.project_amount : null,
       start_date: newProject.start_date || null,
-      deadline: newProject.billing_type === 'project' && newProject.deadline ? newProject.deadline : null
+      deadline: newProject.billing_type === 'project' && newProject.deadline ? newProject.deadline : null,
+      assignee_id: newProject.assignee_id || null
     };
     
     createProjectMutation.mutate(
@@ -162,6 +199,7 @@ const Projects = () => {
             project_amount: 0,
             start_date: '',
             deadline: '',
+            assignee_id: '',
             brd_file: null
           });
           setIsDialogOpen(false);
@@ -180,7 +218,8 @@ const Projects = () => {
         project_amount: editBillingType === 'project' || editingProject.type === 'BRD' ? editingProject.project_amount : null,
         start_date: editingProject.start_date || null,
         deadline: editBillingType === 'project' && editingProject.deadline ? editingProject.deadline : null,
-        status: editingProject.status
+        status: editingProject.status,
+        assignee_id: editingProject.assignee_id || null
       };
       
       updateProjectMutation.mutate(
@@ -292,6 +331,7 @@ const Projects = () => {
           onCreateProject={handleCreateProject}
           onUpdateProject={handleUpdateProject}
           onViewBRD={openBRDFile}
+          assignees={assignees}
         />
       </div>
     </Navigation>

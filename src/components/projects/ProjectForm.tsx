@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,6 +20,12 @@ interface Service {
   name: string;
 }
 
+interface Assignee {
+  id: string;
+  full_name: string;
+  email: string;
+}
+
 interface ProjectData {
   id: string;
   name: string;
@@ -29,6 +36,7 @@ interface ProjectData {
   start_date: string | null;
   deadline: string | null;
   status: string;
+  assignee_id: string | null;
   brd_file_url?: string | null;
 }
 
@@ -42,6 +50,7 @@ interface ProjectFormProps {
     project_amount: number;
     start_date: string;
     deadline: string;
+    assignee_id: string;
     brd_file: File | null;
   };
   setNewProject: (project: any) => void;
@@ -59,6 +68,7 @@ interface ProjectFormProps {
   onUpdateProject: () => void;
   onViewBRD: (url: string) => void;
   onSetEditingProject: (project: ProjectData) => void;
+  assignees: Assignee[];
 }
 
 const ProjectForm = ({ 
@@ -77,7 +87,8 @@ const ProjectForm = ({
   onCreateProject, 
   onUpdateProject, 
   onViewBRD,
-  onSetEditingProject
+  onSetEditingProject,
+  assignees
 }: ProjectFormProps) => {
   const { createProjectMutation, updateProjectMutation } = useProjectOperations();
 
@@ -126,6 +137,7 @@ const ProjectForm = ({
       project_amount: 0,
       start_date: '',
       deadline: '',
+      assignee_id: '',
       brd_file: null
     });
   };
@@ -134,7 +146,7 @@ const ProjectForm = ({
     <>
       {/* Create Project Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Create New Project</DialogTitle>
             <DialogDescription>
@@ -160,6 +172,21 @@ const ProjectForm = ({
                 <SelectContent>
                   {clients.map((client) => (
                     <SelectItem key={client.id} value={client.id}>{client.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="assignee">Assignee</Label>
+              <Select onValueChange={(value) => setNewProject({...newProject, assignee_id: value})}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select an assignee (optional)" />
+                </SelectTrigger>
+                <SelectContent>
+                  {assignees.map((assignee) => (
+                    <SelectItem key={assignee.id} value={assignee.id}>
+                      {assignee.full_name}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -260,7 +287,7 @@ const ProjectForm = ({
 
       {/* Edit Project Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Project</DialogTitle>
             <DialogDescription>
@@ -287,6 +314,22 @@ const ProjectForm = ({
                   <SelectContent>
                     {clients.map((client) => (
                       <SelectItem key={client.id} value={client.id}>{client.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="editAssignee">Assignee</Label>
+                <Select onValueChange={(value) => onSetEditingProject({...editingProject, assignee_id: value})}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select an assignee (optional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Unassigned</SelectItem>
+                    {assignees.map((assignee) => (
+                      <SelectItem key={assignee.id} value={assignee.id}>
+                        {assignee.full_name}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

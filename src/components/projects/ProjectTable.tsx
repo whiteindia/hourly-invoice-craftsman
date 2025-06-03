@@ -22,9 +22,13 @@ interface ProjectData {
   start_date: string | null;
   deadline: string | null;
   brd_file_url: string | null;
+  assignee_id: string | null;
   created_at: string;
   clients: {
     name: string;
+  };
+  assignee?: {
+    full_name: string;
   };
 }
 
@@ -69,6 +73,7 @@ const ProjectTable: React.FC<ProjectTableProps> = ({
               <TableHead>Rate/Amount</TableHead>
               <TableHead>Total Hours</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>Assignee</TableHead>
               <TableHead>Deadline</TableHead>
               <TableHead>BRD</TableHead>
               <TableHead>Actions</TableHead>
@@ -101,6 +106,9 @@ const ProjectTable: React.FC<ProjectTableProps> = ({
                   }>
                     {project.status}
                   </Badge>
+                </TableCell>
+                <TableCell>
+                  {project.assignee?.full_name || 'Unassigned'}
                 </TableCell>
                 <TableCell>
                   {project.deadline ? new Date(project.deadline).toLocaleDateString() : 'N/A'}

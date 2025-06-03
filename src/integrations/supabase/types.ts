@@ -373,6 +373,7 @@ export type Database = {
       }
       projects: {
         Row: {
+          assignee_id: string | null
           brd_file_url: string | null
           client_id: string
           created_at: string
@@ -388,6 +389,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          assignee_id?: string | null
           brd_file_url?: string | null
           client_id: string
           created_at?: string
@@ -403,6 +405,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          assignee_id?: string | null
           brd_file_url?: string | null
           client_id?: string
           created_at?: string
@@ -418,6 +421,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "projects_assignee_id_fkey"
+            columns: ["assignee_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "projects_client_id_fkey"
             columns: ["client_id"]
