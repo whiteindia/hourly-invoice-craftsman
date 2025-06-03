@@ -88,12 +88,12 @@ const Projects = () => {
       }
 
       // Filter by client
-      if (filters.client_id && filters.client_id !== 'all') {
+      if (filters.client_id && filters.client_id !== '') {
         query = query.eq('client_id', filters.client_id);
       }
 
       // Filter by status
-      if (filters.status && filters.status !== '') {
+      if (filters.status !== '') {
         query = query.eq('status', filters.status);
       }
 
