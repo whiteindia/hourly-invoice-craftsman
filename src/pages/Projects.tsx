@@ -279,7 +279,7 @@ const Projects = () => {
           newProject={newProject}
           setNewProject={setNewProject}
           editingProject={editingProject}
-          setEditingProject={setEditingProject}
+          onSetEditingProject={handleEditProject}
           editBillingType={editBillingType}
           setEditBillingType={setEditBillingType}
           editBrdFile={editBrdFile}
@@ -292,7 +292,6 @@ const Projects = () => {
           onCreateProject={handleCreateProject}
           onUpdateProject={handleUpdateProject}
           onViewBRD={openBRDFile}
-          onSetEditingProject={handleEditProject}
         />
       </div>
     </Navigation>

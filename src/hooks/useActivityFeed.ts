@@ -35,10 +35,11 @@ export const useActivityFeed = () => {
     queryFn: async () => {
       console.log('Fetching activity feed...');
       
-      // First get the activity feed data
+      // First get the activity feed data, excluding login activities
       const { data: activities, error: activitiesError } = await supabase
         .from('activity_feed')
         .select('*')
+        .neq('action_type', 'logged_in')
         .order('created_at', { ascending: false })
         .limit(10);
       

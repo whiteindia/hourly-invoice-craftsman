@@ -7,7 +7,17 @@ import { logProjectCreated, logProjectUpdated, logActivity } from '@/utils/activ
 interface ProjectData {
   id: string;
   name: string;
-  clients?: {
+  client_id: string;
+  type: any;
+  hourly_rate: number;
+  project_amount: number | null;
+  total_hours: number;
+  status: any;
+  start_date: string | null;
+  deadline: string | null;
+  brd_file_url: string | null;
+  created_at: string;
+  clients: {
     name: string;
   };
 }
@@ -206,7 +216,23 @@ export const useProjectOperations = () => {
       }
 
       console.log('Project deletion completed successfully');
-      return { id, projectData: projectData as ProjectData };
+      return { 
+        id, 
+        projectData: {
+          ...projectData,
+          id,
+          client_id: '',
+          type: '',
+          hourly_rate: 0,
+          project_amount: null,
+          total_hours: 0,
+          status: '',
+          start_date: null,
+          deadline: null,
+          brd_file_url: null,
+          created_at: ''
+        } as ProjectData 
+      };
     },
     onSuccess: async (result) => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
