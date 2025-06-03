@@ -73,6 +73,13 @@ const Tasks = () => {
   // Convert userRole to string for comparison
   const roleString = userRole as string;
 
+  // Role-based permissions
+  const canCreateTasks = ['admin', 'manager', 'teamlead'].includes(roleString);
+  const canEditTasks = ['admin', 'manager', 'teamlead'].includes(roleString);
+  const canSeeBilling = ['admin', 'accountant'].includes(roleString);
+  const canSeeAllProjects = ['admin'].includes(roleString);
+  const canSeeAssignedProjects = ['admin', 'manager'].includes(roleString);
+
   // Get current user's employee ID for default assigner
   const { data: currentEmployee } = useQuery({
     queryKey: ['current-employee', user?.email],
@@ -117,7 +124,7 @@ const Tasks = () => {
       if (filters.status && filters.status !== 'all') {
         query = query.eq('status', filters.status as 'Not Started' | 'In Progress' | 'Completed');
       }
-      if (filters.billing && filters.billing !== 'all') {
+      if (filters.billing && filters.billing !== 'all' && canSeeBilling) {
         query = query.eq('invoiced', filters.billing === 'billed');
       }
       if (filters.assignee && filters.assignee !== 'all') {
@@ -204,12 +211,6 @@ const Tasks = () => {
       return data as Employee[];
     }
   });
-
-  // Check if user can create tasks (admin, manager, team lead)
-  const canCreateTasks = ['admin', 'manager', 'teamlead'].includes(roleString);
-
-  // Check if user can see billing information
-  const canSeeBilling = ['admin', 'accountant'].includes(roleString);
 
   // Helper functions for deadline and duration status
   const isOverdue = (task: Task) => {
@@ -537,98 +538,100 @@ const Tasks = () => {
           )}
         </div>
 
-        {/* Edit Task Dialog */}
-        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-          <DialogContent className="max-w-lg">
-            <DialogHeader>
-              <DialogTitle>Edit Task</DialogTitle>
-              <DialogDescription>
-                Update the task details.
-              </DialogDescription>
-            </DialogHeader>
-            {editingTask && (
-              <div className="space-y-4 max-h-96 overflow-y-auto">
-                <div className="space-y-2">
-                  <Label htmlFor="editTaskName">Task Name</Label>
-                  <Input
-                    id="editTaskName"
-                    value={editingTask.name}
-                    onChange={(e) => setEditingTask({...editingTask, name: e.target.value})}
-                    placeholder="Enter task name"
-                  />
+        {/* Edit Task Dialog - Only for teamleads, managers, and admins */}
+        {canEditTasks && (
+          <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+            <DialogContent className="max-w-lg">
+              <DialogHeader>
+                <DialogTitle>Edit Task</DialogTitle>
+                <DialogDescription>
+                  Update the task details.
+                </DialogDescription>
+              </DialogHeader>
+              {editingTask && (
+                <div className="space-y-4 max-h-96 overflow-y-auto">
+                  <div className="space-y-2">
+                    <Label htmlFor="editTaskName">Task Name</Label>
+                    <Input
+                      id="editTaskName"
+                      value={editingTask.name}
+                      onChange={(e) => setEditingTask({...editingTask, name: e.target.value})}
+                      placeholder="Enter task name"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="editProject">Project</Label>
+                    <Select value={editingTask.project_id} onValueChange={(value) => setEditingTask({...editingTask, project_id: value})}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a project" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {projects.map((project) => (
+                          <SelectItem key={project.id} value={project.id}>
+                            {project.name} - {project.clients.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="editAssignee">Assignee</Label>
+                    <Select value={editingTask.assignee_id || 'unassigned'} onValueChange={(value) => setEditingTask({...editingTask, assignee_id: value === 'unassigned' ? null : value})}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select assignee (optional)" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="unassigned">No assignee</SelectItem>
+                        {employees.map((employee) => (
+                          <SelectItem key={employee.id} value={employee.id}>
+                            {employee.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="editDate">Date</Label>
+                    <Input
+                      id="editDate"
+                      type="date"
+                      value={editingTask.date}
+                      onChange={(e) => setEditingTask({...editingTask, date: e.target.value})}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="editDeadline">Deadline (Optional)</Label>
+                    <Input
+                      id="editDeadline"
+                      type="date"
+                      value={editingTask.deadline || ''}
+                      onChange={(e) => setEditingTask({...editingTask, deadline: e.target.value})}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="editEstimatedDuration">Estimated Duration (Hours)</Label>
+                    <Input
+                      id="editEstimatedDuration"
+                      type="number"
+                      step="0.5"
+                      min="0"
+                      value={editingTask.estimated_duration || ''}
+                      onChange={(e) => setEditingTask({...editingTask, estimated_duration: e.target.value ? parseFloat(e.target.value) : null})}
+                      placeholder="Enter estimated hours"
+                    />
+                  </div>
+                  <Button 
+                    onClick={handleEditTask} 
+                    className="w-full"
+                    disabled={updateTaskMutation.isPending}
+                  >
+                    {updateTaskMutation.isPending ? 'Updating...' : 'Update Task'}
+                  </Button>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="editProject">Project</Label>
-                  <Select value={editingTask.project_id} onValueChange={(value) => setEditingTask({...editingTask, project_id: value})}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a project" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {projects.map((project) => (
-                        <SelectItem key={project.id} value={project.id}>
-                          {project.name} - {project.clients.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="editAssignee">Assignee</Label>
-                  <Select value={editingTask.assignee_id || 'unassigned'} onValueChange={(value) => setEditingTask({...editingTask, assignee_id: value === 'unassigned' ? null : value})}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select assignee (optional)" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="unassigned">No assignee</SelectItem>
-                      {employees.map((employee) => (
-                        <SelectItem key={employee.id} value={employee.id}>
-                          {employee.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="editDate">Date</Label>
-                  <Input
-                    id="editDate"
-                    type="date"
-                    value={editingTask.date}
-                    onChange={(e) => setEditingTask({...editingTask, date: e.target.value})}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="editDeadline">Deadline (Optional)</Label>
-                  <Input
-                    id="editDeadline"
-                    type="date"
-                    value={editingTask.deadline || ''}
-                    onChange={(e) => setEditingTask({...editingTask, deadline: e.target.value})}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="editEstimatedDuration">Estimated Duration (Hours)</Label>
-                  <Input
-                    id="editEstimatedDuration"
-                    type="number"
-                    step="0.5"
-                    min="0"
-                    value={editingTask.estimated_duration || ''}
-                    onChange={(e) => setEditingTask({...editingTask, estimated_duration: e.target.value ? parseFloat(e.target.value) : null})}
-                    placeholder="Enter estimated hours"
-                  />
-                </div>
-                <Button 
-                  onClick={handleEditTask} 
-                  className="w-full"
-                  disabled={updateTaskMutation.isPending}
-                >
-                  {updateTaskMutation.isPending ? 'Updating...' : 'Update Task'}
-                </Button>
-              </div>
-            )}
-          </DialogContent>
-        </Dialog>
+              )}
+            </DialogContent>
+          </Dialog>
+        )}
 
         {/* Filters */}
         <Card className="mb-6">
@@ -639,7 +642,7 @@ const Tasks = () => {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-7 gap-4 items-end">
+            <div className={`grid grid-cols-1 md:grid-cols-${canSeeBilling ? '7' : '6'} gap-4 items-end`}>
               <div className="space-y-2">
                 <Label>Client</Label>
                 <Select value={filters.client} onValueChange={(value) => setFilters({...filters, client: value})}>
@@ -837,13 +840,15 @@ const Tasks = () => {
                           >
                             <History className="h-4 w-4" />
                           </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => openEditDialog(task)}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
+                          {canEditTasks && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => openEditDialog(task)}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                          )}
                           <Select value={task.status} onValueChange={(value) => handleStatusChange(task.id, value)}>
                             <SelectTrigger className="w-32">
                               <SelectValue />
