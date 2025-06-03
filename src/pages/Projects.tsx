@@ -49,8 +49,8 @@ const Projects = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [filters, setFilters] = useState({
     year: new Date().getFullYear().toString(),
-    client_id: '',
-    status: '' as ProjectStatus | ''
+    client_id: 'all-clients',
+    status: 'all-statuses'
   });
 
   const projectTypes: { value: ProjectType; rate: number }[] = [
@@ -88,12 +88,12 @@ const Projects = () => {
       }
 
       // Filter by client
-      if (filters.client_id && filters.client_id !== '') {
+      if (filters.client_id && filters.client_id !== 'all-clients') {
         query = query.eq('client_id', filters.client_id);
       }
 
       // Filter by status
-      if (filters.status !== '') {
+      if (filters.status !== 'all-statuses') {
         query = query.eq('status', filters.status);
       }
 
@@ -213,8 +213,8 @@ const Projects = () => {
   const clearFilters = () => {
     setFilters({ 
       year: new Date().getFullYear().toString(), 
-      client_id: '', 
-      status: '' 
+      client_id: 'all-clients', 
+      status: 'all-statuses' 
     });
   };
 
@@ -386,7 +386,7 @@ const Projects = () => {
                     <SelectValue placeholder="All clients" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All clients</SelectItem>
+                    <SelectItem value="all-clients">All clients</SelectItem>
                     {clients.map((client) => (
                       <SelectItem key={client.id} value={client.id}>
                         {client.name}
@@ -397,12 +397,12 @@ const Projects = () => {
               </div>
               <div className="space-y-2">
                 <Label>Status</Label>
-                <Select value={filters.status} onValueChange={(value) => setFilters({...filters, status: value as ProjectStatus | ''})}>
+                <Select value={filters.status} onValueChange={(value) => setFilters({...filters, status: value})}>
                   <SelectTrigger>
                     <SelectValue placeholder="All statuses" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All statuses</SelectItem>
+                    <SelectItem value="all-statuses">All statuses</SelectItem>
                     <SelectItem value="Active">Active</SelectItem>
                     <SelectItem value="Completed">Completed</SelectItem>
                   </SelectContent>
