@@ -1,4 +1,3 @@
-
 import React, { useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -334,10 +333,10 @@ const Index = () => {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">${stats?.revenue || 0}</div>
+              <div className="text-2xl font-bold">₹{stats?.revenue || 0}</div>
               {statsError && <p className="text-xs text-red-500 mt-1">Error loading data</p>}
             </CardContent>
           </Card>
@@ -436,7 +435,7 @@ const Index = () => {
                           </div>
                         ) : (
                           <div className="flex items-center space-x-1">
-                            <DollarSign className="h-4 w-4 text-green-600" />
+                            <TrendingUp className="h-4 w-4 text-green-600" />
                             <span className="text-sm font-medium">₹{project.hourly_rate}/hr</span>
                           </div>
                         )}

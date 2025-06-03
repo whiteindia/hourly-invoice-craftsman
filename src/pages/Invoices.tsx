@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, FileText, Download, Eye, DollarSign, ChevronDown, ChevronUp, Filter } from 'lucide-react';
+import { Plus, FileText, Download, Eye, DollarSign, ChevronDown, ChevronUp, Filter, TrendingUp } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -543,7 +543,7 @@ const Invoices = () => {
                   <p className="text-sm font-medium text-gray-600">Total Revenue</p>
                   <p className="text-2xl font-bold text-green-600">₹{totalRevenue.toFixed(2)}</p>
                 </div>
-                <DollarSign className="h-8 w-8 text-green-600" />
+                <TrendingUp className="h-8 w-8 text-green-600" />
               </div>
             </CardContent>
           </Card>
