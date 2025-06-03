@@ -48,6 +48,7 @@ interface Assignee {
   id: string;
   full_name: string;
   email: string;
+  role: string;
 }
 
 const Projects = () => {
@@ -126,7 +127,7 @@ const Projects = () => {
     }
   });
 
-  // Fetch assignees (admin users and managers) - Fixed query
+  // Fetch assignees (admin users and managers) - Enhanced with better debugging
   const { data: assignees = [] } = useQuery({
     queryKey: ['assignees'],
     queryFn: async () => {
@@ -135,13 +136,17 @@ const Projects = () => {
       // First get user roles for admin and manager
       const { data: userRoles, error: rolesError } = await supabase
         .from('user_roles')
-        .select('user_id')
+        .select('user_id, role')
         .in('role', ['admin', 'manager']);
       
       if (rolesError) {
         console.error('Error fetching user roles:', rolesError);
         throw rolesError;
       }
+      
+      console.log('User roles found:', userRoles);
+      console.log('Admin roles:', userRoles?.filter(r => r.role === 'admin'));
+      console.log('Manager roles:', userRoles?.filter(r => r.role === 'manager'));
       
       if (!userRoles || userRoles.length === 0) {
         console.log('No admin or manager users found');
@@ -150,6 +155,7 @@ const Projects = () => {
       
       // Extract user IDs
       const userIds = userRoles.map(role => role.user_id);
+      console.log('User IDs to fetch profiles for:', userIds);
       
       // Now get profiles for these users
       const { data: profiles, error: profilesError } = await supabase
@@ -163,16 +169,23 @@ const Projects = () => {
         throw profilesError;
       }
       
-      console.log('Raw assignees data:', profiles);
+      console.log('Raw profiles data:', profiles);
       
-      // Transform the data to match expected format
-      const transformedData = profiles?.map(profile => ({
-        id: profile.id,
-        full_name: profile.full_name || profile.email,
-        email: profile.email
-      })) || [];
+      // Transform the data to match expected format and include role information
+      const transformedData = profiles?.map(profile => {
+        const userRole = userRoles.find(ur => ur.user_id === profile.id);
+        return {
+          id: profile.id,
+          full_name: profile.full_name || profile.email,
+          email: profile.email,
+          role: userRole?.role || 'unknown'
+        };
+      }) || [];
       
       console.log('Transformed assignees data:', transformedData);
+      console.log('Total assignees found:', transformedData.length);
+      console.log('Admins:', transformedData.filter(a => a.role === 'admin'));
+      console.log('Managers:', transformedData.filter(a => a.role === 'manager'));
       
       return transformedData as Assignee[];
     }
