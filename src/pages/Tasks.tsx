@@ -14,7 +14,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { Database } from '@/integrations/supabase/types';
 import Navigation from '@/components/Navigation';
-import TaskCommentDialog from '@/components/TaskCommentDialog';
 import TimeTrackerWithComment from '@/components/TimeTrackerWithComment';
 import TaskHistory from '@/components/TaskHistory';
 import { logActivity } from '@/utils/activityLogger';
@@ -24,6 +23,17 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 type TaskStatus = Database['public']['Enums']['task_status'];
 
@@ -235,9 +245,18 @@ const Tasks = () => {
     }
   });
 
-  // Mutation to delete a task
+  // Updated mutation to delete a task and its related time entries
   const deleteTaskMutation = useMutation({
     mutationFn: async (id: string) => {
+      // First, delete all time entries associated with this task
+      const { error: timeEntriesError } = await supabase
+        .from('time_entries')
+        .delete()
+        .eq('task_id', id);
+      
+      if (timeEntriesError) throw timeEntriesError;
+
+      // Then delete the task
       const { data, error } = await supabase
         .from('tasks')
         .delete()
@@ -257,7 +276,8 @@ const Tasks = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      toast.success('Task deleted successfully!');
+      queryClient.invalidateQueries({ queryKey: ['time-entries'] });
+      toast.success('Task and all related time entries deleted successfully!');
     },
     onError: (error) => {
       toast.error('Failed to delete task: ' + error.message);
@@ -765,14 +785,34 @@ const Tasks = () => {
                         History
                       </Button>
                       
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleDeleteTask(task.id)}
-                        className="text-red-600 hover:text-red-700"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete Task</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Are you sure you want to delete this task? This will also delete all time entries associated with this task. This action cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => handleDeleteTask(task.id)}
+                              className="bg-red-600 hover:bg-red-700"
+                            >
+                              Delete Task
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
                     </div>
 
                     {/* Collapsible History */}
