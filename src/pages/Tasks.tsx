@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Play, Pause, CheckCircle, Clock, Filter, FileText } from 'lucide-react';
+import { Plus, Play, Pause, CheckCircle, Clock, Filter, FileText, History } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -148,6 +147,36 @@ const Tasks = () => {
     }
   });
 
+  const updateTaskHoursMutation = useMutation({
+    mutationFn: async ({ taskId }: { taskId: string }) => {
+      // Calculate total hours from comments
+      const { data: comments, error: commentsError } = await supabase
+        .from('task_comments')
+        .select('hours_logged')
+        .eq('task_id', taskId);
+      
+      if (commentsError) throw commentsError;
+      
+      const totalHours = comments.reduce((sum, comment) => sum + comment.hours_logged, 0);
+      
+      const { data, error } = await supabase
+        .from('tasks')
+        .update({ hours: totalHours })
+        .eq('id', taskId)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    },
+    onError: (error) => {
+      console.error('Failed to update task hours:', error);
+    }
+  });
+
   const handleAddTask = () => {
     if (!newTask.name || !newTask.project_id) {
       toast.error('Please fill in all required fields');
@@ -190,6 +219,14 @@ const Tasks = () => {
   };
 
   const uniqueClients = Array.from(new Set(projects.map(p => p.clients.name)));
+
+  const handleCommentSuccess = () => {
+    if (selectedTask) {
+      updateTaskHoursMutation.mutate({ taskId: selectedTask.id });
+    }
+    queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    queryClient.invalidateQueries({ queryKey: ['task-comments'] });
+  };
 
   if (isLoading) {
     return (
@@ -409,6 +446,14 @@ const Tasks = () => {
                               Start
                             </Button>
                           )}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => toggleTaskExpansion(task.id)}
+                          >
+                            <History className="h-4 w-4 mr-1" />
+                            History
+                          </Button>
                           <Select value={task.status} onValueChange={(value) => handleStatusChange(task.id, value)}>
                             <SelectTrigger className="w-32">
                               <SelectValue />
@@ -448,10 +493,7 @@ const Tasks = () => {
           task={selectedTask}
           isOpen={isCommentDialogOpen}
           onOpenChange={setIsCommentDialogOpen}
-          onSuccess={() => {
-            queryClient.invalidateQueries({ queryKey: ['tasks'] });
-            queryClient.invalidateQueries({ queryKey: ['task-comments'] });
-          }}
+          onSuccess={handleCommentSuccess}
         />
       </div>
     </div>
