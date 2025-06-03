@@ -70,7 +70,7 @@ const Tasks = () => {
         query = query.eq('project_id', filters.project);
       }
       if (filters.status && filters.status !== 'all') {
-        query = query.eq('status', filters.status);
+        query = query.eq('status', filters.status as 'Not Started' | 'In Progress' | 'Completed');
       }
       if (filters.billing && filters.billing !== 'all') {
         query = query.eq('invoiced', filters.billing === 'billed');
