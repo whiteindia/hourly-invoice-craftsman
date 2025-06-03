@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -10,132 +9,214 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Plus, FileText, Download, Eye, DollarSign } from 'lucide-react';
 import { toast } from 'sonner';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+
+interface Invoice {
+  id: string;
+  amount: number;
+  hours: number;
+  rate: number;
+  status: string;
+  date: string;
+  due_date: string;
+  clients: {
+    name: string;
+  };
+  projects: {
+    name: string;
+  };
+}
+
+interface Task {
+  id: string;
+  name: string;
+  hours: number;
+  projects: {
+    hourly_rate: number;
+  };
+}
+
+interface Project {
+  id: string;
+  name: string;
+  clients: {
+    id: string;
+    name: string;
+  };
+}
 
 const Invoices = () => {
-  const [invoices, setInvoices] = useState([
-    {
-      id: "INV-001",
-      client: "TechCorp Solutions",
-      project: "DevOps Infrastructure Setup",
-      amount: 2450.00,
-      hours: 24.5,
-      rate: 100,
-      status: "Paid",
-      date: "2024-01-15",
-      dueDate: "2024-02-15"
-    },
-    {
-      id: "INV-002",
-      client: "StartupXYZ",
-      project: "Marketing Strategy Development",
-      amount: 1800.00,
-      hours: 15.0,
-      rate: 120,
-      status: "Sent",
-      date: "2024-01-10",
-      dueDate: "2024-02-10"
-    },
-    {
-      id: "INV-003",
-      client: "LocalBiz",
-      project: "Business Process Optimization",
-      amount: 3200.00,
-      hours: 32.0,
-      rate: 100,
-      status: "Draft",
-      date: "2024-01-08",
-      dueDate: "2024-02-08"
-    }
-  ]);
-
+  const queryClient = useQueryClient();
   const [newInvoice, setNewInvoice] = useState({
-    client: '',
-    project: '',
-    selectedTasks: [] as number[],
+    project_id: '',
+    selectedTasks: [] as string[],
     description: ''
   });
-
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
-  // Mock tasks data - in a real app, this would come from your database
-  const availableTasks = [
-    {
-      id: 1,
-      name: "Server Configuration",
-      project: "DevOps Infrastructure Setup",
-      client: "TechCorp Solutions",
-      hours: 4.5,
-      rate: 100,
-      status: "Completed",
-      date: "2024-01-15",
-      invoiced: false
-    },
-    {
-      id: 2,
-      name: "Database Setup",
-      project: "DevOps Infrastructure Setup",
-      client: "TechCorp Solutions",
-      hours: 6.0,
-      rate: 100,
-      status: "Completed",
-      date: "2024-01-16",
-      invoiced: false
-    },
-    {
-      id: 3,
-      name: "Market Research",
-      project: "Marketing Strategy Development",
-      client: "StartupXYZ",
-      hours: 3.0,
-      rate: 120,
-      status: "Completed",
-      date: "2024-01-14",
-      invoiced: false
-    },
-    {
-      id: 4,
-      name: "Strategy Documentation",
-      project: "Marketing Strategy Development",
-      client: "StartupXYZ",
-      hours: 4.5,
-      rate: 120,
-      status: "Completed",
-      date: "2024-01-15",
-      invoiced: false
-    },
-    {
-      id: 5,
-      name: "Process Documentation",
-      project: "Business Process Optimization",
-      client: "LocalBiz",
-      hours: 8.0,
-      rate: 100,
-      status: "Completed",
-      date: "2024-01-16",
-      invoiced: false
+  // Fetch invoices with client and project data
+  const { data: invoices = [], isLoading } = useQuery({
+    queryKey: ['invoices'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('invoices')
+        .select(`
+          *,
+          clients(name),
+          projects(name)
+        `)
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      return data as Invoice[];
     }
-  ];
+  });
 
-  const clients = ["TechCorp Solutions", "StartupXYZ", "LocalBiz"];
-  const projects = [
-    { name: "DevOps Infrastructure Setup", client: "TechCorp Solutions", rate: 100 },
-    { name: "Marketing Strategy Development", client: "StartupXYZ", rate: 120 },
-    { name: "Business Process Optimization", client: "LocalBiz", rate: 100 }
-  ];
-
-  const handleProjectChange = (projectName: string) => {
-    const project = projects.find(p => p.name === projectName);
-    if (project) {
-      setNewInvoice({
-        ...newInvoice,
-        project: projectName,
-        client: project.client,
-        selectedTasks: []
-      });
+  // Fetch projects for dropdown
+  const { data: projects = [] } = useQuery({
+    queryKey: ['projects-for-invoices'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('projects')
+        .select(`
+          id,
+          name,
+          clients(id, name)
+        `);
+      
+      if (error) throw error;
+      return data as Project[];
     }
+  });
+
+  // Fetch available tasks for selected project
+  const { data: availableTasks = [] } = useQuery({
+    queryKey: ['available-tasks', newInvoice.project_id],
+    queryFn: async () => {
+      if (!newInvoice.project_id) return [];
+      
+      const { data, error } = await supabase
+        .from('tasks')
+        .select(`
+          *,
+          projects(hourly_rate)
+        `)
+        .eq('project_id', newInvoice.project_id)
+        .eq('status', 'Completed')
+        .eq('invoiced', false);
+      
+      if (error) throw error;
+      return data as Task[];
+    },
+    enabled: !!newInvoice.project_id
+  });
+
+  // Create invoice mutation
+  const createInvoiceMutation = useMutation({
+    mutationFn: async (invoiceData: any) => {
+      // Generate invoice ID
+      const { data: invoiceCount } = await supabase
+        .from('invoices')
+        .select('id', { count: 'exact' });
+      
+      const invoiceId = `INV-${String((invoiceCount?.length || 0) + 1).padStart(3, '0')}`;
+      
+      // Calculate totals
+      const selectedTasksData = availableTasks.filter(task => 
+        newInvoice.selectedTasks.includes(task.id)
+      );
+      
+      const totalHours = selectedTasksData.reduce((sum, task) => sum + task.hours, 0);
+      const rate = selectedTasksData[0]?.projects.hourly_rate || 0;
+      const totalAmount = totalHours * rate;
+      
+      // Get project and client info
+      const project = projects.find(p => p.id === newInvoice.project_id);
+      
+      const dueDate = new Date();
+      dueDate.setDate(dueDate.getDate() + 30);
+      
+      // Create invoice
+      const { data: invoice, error: invoiceError } = await supabase
+        .from('invoices')
+        .insert([{
+          id: invoiceId,
+          client_id: project?.clients.id,
+          project_id: newInvoice.project_id,
+          amount: totalAmount,
+          hours: totalHours,
+          rate: rate,
+          status: 'Draft',
+          due_date: dueDate.toISOString().split('T')[0]
+        }])
+        .select()
+        .single();
+      
+      if (invoiceError) throw invoiceError;
+      
+      // Link tasks to invoice
+      const invoiceTasksData = newInvoice.selectedTasks.map(taskId => ({
+        invoice_id: invoiceId,
+        task_id: taskId
+      }));
+      
+      const { error: taskLinkError } = await supabase
+        .from('invoice_tasks')
+        .insert(invoiceTasksData);
+      
+      if (taskLinkError) throw taskLinkError;
+      
+      // Mark tasks as invoiced
+      const { error: updateTasksError } = await supabase
+        .from('tasks')
+        .update({ invoiced: true })
+        .in('id', newInvoice.selectedTasks);
+      
+      if (updateTasksError) throw updateTasksError;
+      
+      return invoice;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      queryClient.invalidateQueries({ queryKey: ['available-tasks'] });
+      setNewInvoice({ project_id: '', selectedTasks: [], description: '' });
+      setIsDialogOpen(false);
+      toast.success('Invoice created successfully!');
+    },
+    onError: (error) => {
+      toast.error('Failed to create invoice: ' + error.message);
+    }
+  });
+
+  // Update invoice status mutation
+  const updateInvoiceStatusMutation = useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: string }) => {
+      const { data, error } = await supabase
+        .from('invoices')
+        .update({ status })
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      toast.success(`Invoice ${data.id} marked as ${data.status.toLowerCase()}`);
+    }
+  });
+
+  const handleProjectChange = (projectId: string) => {
+    setNewInvoice({
+      ...newInvoice,
+      project_id: projectId,
+      selectedTasks: []
+    });
   };
 
-  const handleTaskSelection = (taskId: number, checked: boolean) => {
+  const handleTaskSelection = (taskId: string, checked: boolean) => {
     if (checked) {
       setNewInvoice({
         ...newInvoice,
@@ -149,53 +230,22 @@ const Invoices = () => {
     }
   };
 
-  const getFilteredTasks = () => {
-    return availableTasks.filter(task => 
-      task.project === newInvoice.project && 
-      task.status === "Completed" && 
-      !task.invoiced
-    );
-  };
-
   const getSelectedTasksTotal = () => {
     const selectedTasks = availableTasks.filter(task => 
       newInvoice.selectedTasks.includes(task.id)
     );
     const totalHours = selectedTasks.reduce((sum, task) => sum + task.hours, 0);
-    const totalAmount = selectedTasks.reduce((sum, task) => sum + (task.hours * task.rate), 0);
+    const rate = selectedTasks[0]?.projects.hourly_rate || 0;
+    const totalAmount = totalHours * rate;
     return { totalHours, totalAmount };
   };
 
   const handleCreateInvoice = () => {
-    if (!newInvoice.client || !newInvoice.project || newInvoice.selectedTasks.length === 0) {
+    if (!newInvoice.project_id || newInvoice.selectedTasks.length === 0) {
       toast.error('Please select a project and at least one task');
       return;
     }
-
-    const selectedTasks = availableTasks.filter(task => 
-      newInvoice.selectedTasks.includes(task.id)
-    );
-    
-    const totalHours = selectedTasks.reduce((sum, task) => sum + task.hours, 0);
-    const totalAmount = selectedTasks.reduce((sum, task) => sum + (task.hours * task.rate), 0);
-    const rate = selectedTasks.length > 0 ? selectedTasks[0].rate : 0;
-
-    const invoice = {
-      id: `INV-${String(invoices.length + 1).padStart(3, '0')}`,
-      client: newInvoice.client,
-      project: newInvoice.project,
-      hours: totalHours,
-      rate,
-      amount: totalAmount,
-      status: "Draft",
-      date: new Date().toISOString().split('T')[0],
-      dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-    };
-
-    setInvoices([...invoices, invoice]);
-    setNewInvoice({ client: '', project: '', selectedTasks: [], description: '' });
-    setIsDialogOpen(false);
-    toast.success('Invoice created successfully!');
+    createInvoiceMutation.mutate({});
   };
 
   const getStatusColor = (status: string) => {
@@ -214,16 +264,19 @@ const Invoices = () => {
   };
 
   const updateInvoiceStatus = (invoiceId: string, newStatus: string) => {
-    setInvoices(invoices.map(invoice => 
-      invoice.id === invoiceId 
-        ? { ...invoice, status: newStatus }
-        : invoice
-    ));
-    toast.success(`Invoice ${invoiceId} marked as ${newStatus.toLowerCase()}`);
+    updateInvoiceStatusMutation.mutate({ id: invoiceId, status: newStatus });
   };
 
   const totalRevenue = invoices.filter(inv => inv.status === 'Paid').reduce((sum, inv) => sum + inv.amount, 0);
   const pendingRevenue = invoices.filter(inv => inv.status === 'Sent').reduce((sum, inv) => sum + inv.amount, 0);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
+        <div className="text-lg">Loading invoices...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
@@ -251,29 +304,29 @@ const Invoices = () => {
               <div className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="project">Project</Label>
-                  <Select value={newInvoice.project} onValueChange={handleProjectChange}>
+                  <Select value={newInvoice.project_id} onValueChange={handleProjectChange}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select a project" />
                     </SelectTrigger>
                     <SelectContent>
                       {projects.map((project) => (
-                        <SelectItem key={project.name} value={project.name}>
-                          {project.name} ({project.client})
+                        <SelectItem key={project.id} value={project.id}>
+                          {project.name} ({project.clients.name})
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
 
-                {newInvoice.project && (
+                {newInvoice.project_id && (
                   <div className="space-y-2">
                     <Label>Select Tasks to Invoice</Label>
                     <div className="border rounded-lg p-4 max-h-60 overflow-y-auto">
-                      {getFilteredTasks().length === 0 ? (
+                      {availableTasks.length === 0 ? (
                         <p className="text-gray-500 text-sm">No completed tasks available for this project.</p>
                       ) : (
                         <div className="space-y-3">
-                          {getFilteredTasks().map((task) => (
+                          {availableTasks.map((task) => (
                             <div key={task.id} className="flex items-center space-x-3 p-2 hover:bg-gray-50 rounded">
                               <Checkbox
                                 id={`task-${task.id}`}
@@ -285,7 +338,7 @@ const Invoices = () => {
                                   {task.name}
                                 </label>
                                 <div className="text-xs text-gray-600">
-                                  {task.hours}h × ₹{task.rate}/hr = ₹{(task.hours * task.rate).toFixed(2)}
+                                  {task.hours}h × ₹{task.projects.hourly_rate}/hr = ₹{(task.hours * task.projects.hourly_rate).toFixed(2)}
                                 </div>
                               </div>
                             </div>
@@ -318,9 +371,9 @@ const Invoices = () => {
                 <Button 
                   onClick={handleCreateInvoice} 
                   className="w-full"
-                  disabled={newInvoice.selectedTasks.length === 0}
+                  disabled={newInvoice.selectedTasks.length === 0 || createInvoiceMutation.isPending}
                 >
-                  Create Invoice
+                  {createInvoiceMutation.isPending ? 'Creating...' : 'Create Invoice'}
                 </Button>
               </div>
             </DialogContent>
@@ -377,11 +430,11 @@ const Invoices = () => {
                         {invoice.status}
                       </Badge>
                     </div>
-                    <p className="text-gray-600 mb-1">{invoice.client}</p>
-                    <p className="text-sm text-gray-500">{invoice.project}</p>
+                    <p className="text-gray-600 mb-1">{invoice.clients.name}</p>
+                    <p className="text-sm text-gray-500">{invoice.projects.name}</p>
                     <div className="mt-3 flex items-center space-x-6 text-sm text-gray-600">
                       <span>{invoice.hours}h × ₹{invoice.rate}/hr</span>
-                      <span>Due: {invoice.dueDate}</span>
+                      <span>Due: {invoice.due_date}</span>
                     </div>
                   </div>
                   
@@ -402,6 +455,7 @@ const Invoices = () => {
                         <Button 
                           size="sm"
                           onClick={() => updateInvoiceStatus(invoice.id, 'Sent')}
+                          disabled={updateInvoiceStatusMutation.isPending}
                         >
                           Send
                         </Button>
@@ -411,6 +465,7 @@ const Invoices = () => {
                           size="sm"
                           onClick={() => updateInvoiceStatus(invoice.id, 'Paid')}
                           className="bg-green-600 hover:bg-green-700"
+                          disabled={updateInvoiceStatusMutation.isPending}
                         >
                           Mark Paid
                         </Button>

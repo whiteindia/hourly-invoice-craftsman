@@ -9,48 +9,36 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Badge } from '@/components/ui/badge';
 import { Plus, DollarSign, Clock, User } from 'lucide-react';
 import { toast } from 'sonner';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+
+interface Project {
+  id: string;
+  name: string;
+  type: string;
+  hourly_rate: number;
+  total_hours: number;
+  status: string;
+  clients: {
+    name: string;
+  };
+}
+
+interface Client {
+  id: string;
+  name: string;
+}
 
 const Projects = () => {
-  const [projects, setProjects] = useState([
-    {
-      id: 1,
-      name: "DevOps Infrastructure Setup",
-      client: "TechCorp Solutions",
-      type: "DevOps",
-      hourlyRate: 100,
-      totalHours: 24.5,
-      status: "Active"
-    },
-    {
-      id: 2,
-      name: "Marketing Strategy Development",
-      client: "StartupXYZ",
-      type: "Marketing",
-      hourlyRate: 120,
-      totalHours: 15.0,
-      status: "Active"
-    },
-    {
-      id: 3,
-      name: "Business Process Optimization",
-      client: "LocalBiz",
-      type: "Consulting",
-      hourlyRate: 100,
-      totalHours: 32.0,
-      status: "Completed"
-    }
-  ]);
-
+  const queryClient = useQueryClient();
   const [newProject, setNewProject] = useState({
     name: '',
-    client: '',
+    client_id: '',
     type: '',
-    hourlyRate: ''
+    hourly_rate: ''
   });
-
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
-  const clients = ["TechCorp Solutions", "StartupXYZ", "LocalBiz"];
   const projectTypes = [
     { value: "DevOps", rate: 100 },
     { value: "Marketing", rate: 120 },
@@ -59,33 +47,84 @@ const Projects = () => {
     { value: "Technical Writing", rate: 80 }
   ];
 
+  // Fetch projects with client data
+  const { data: projects = [], isLoading } = useQuery({
+    queryKey: ['projects'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('projects')
+        .select(`
+          *,
+          clients(name)
+        `);
+      
+      if (error) throw error;
+      return data as Project[];
+    }
+  });
+
+  // Fetch clients for dropdown
+  const { data: clients = [] } = useQuery({
+    queryKey: ['clients-simple'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('clients')
+        .select('id, name');
+      
+      if (error) throw error;
+      return data as Client[];
+    }
+  });
+
+  // Add project mutation
+  const addProjectMutation = useMutation({
+    mutationFn: async (projectData: {
+      name: string;
+      client_id: string;
+      type: string;
+      hourly_rate: number;
+    }) => {
+      const { data, error } = await supabase
+        .from('projects')
+        .insert([projectData])
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      setNewProject({ name: '', client_id: '', type: '', hourly_rate: '' });
+      setIsDialogOpen(false);
+      toast.success('Project created successfully!');
+    },
+    onError: (error) => {
+      toast.error('Failed to create project: ' + error.message);
+    }
+  });
+
   const handleProjectTypeChange = (type: string) => {
     const projectType = projectTypes.find(pt => pt.value === type);
     setNewProject({
       ...newProject,
       type,
-      hourlyRate: projectType ? projectType.rate.toString() : ''
+      hourly_rate: projectType ? projectType.rate.toString() : ''
     });
   };
 
   const handleAddProject = () => {
-    if (!newProject.name || !newProject.client || !newProject.type || !newProject.hourlyRate) {
+    if (!newProject.name || !newProject.client_id || !newProject.type || !newProject.hourly_rate) {
       toast.error('Please fill in all fields');
       return;
     }
 
-    const project = {
-      id: projects.length + 1,
-      ...newProject,
-      hourlyRate: parseFloat(newProject.hourlyRate),
-      totalHours: 0,
-      status: "Active"
-    };
-
-    setProjects([...projects, project]);
-    setNewProject({ name: '', client: '', type: '', hourlyRate: '' });
-    setIsDialogOpen(false);
-    toast.success('Project created successfully!');
+    addProjectMutation.mutate({
+      name: newProject.name,
+      client_id: newProject.client_id,
+      type: newProject.type as any,
+      hourly_rate: parseFloat(newProject.hourly_rate)
+    });
   };
 
   const getStatusColor = (status: string) => {
@@ -115,6 +154,14 @@ const Projects = () => {
         return 'bg-gray-100 text-gray-800';
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
+        <div className="text-lg">Loading projects...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
@@ -151,13 +198,13 @@ const Projects = () => {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="client">Client</Label>
-                  <Select value={newProject.client} onValueChange={(value) => setNewProject({...newProject, client: value})}>
+                  <Select value={newProject.client_id} onValueChange={(value) => setNewProject({...newProject, client_id: value})}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select a client" />
                     </SelectTrigger>
                     <SelectContent>
                       {clients.map((client) => (
-                        <SelectItem key={client} value={client}>{client}</SelectItem>
+                        <SelectItem key={client.id} value={client.id}>{client.name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -171,24 +218,28 @@ const Projects = () => {
                     <SelectContent>
                       {projectTypes.map((type) => (
                         <SelectItem key={type.value} value={type.value}>
-                          {type.value} (${type.rate}/hr)
+                          {type.value} (₹{type.rate}/hr)
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="hourlyRate">Hourly Rate ($)</Label>
+                  <Label htmlFor="hourlyRate">Hourly Rate (₹)</Label>
                   <Input
                     id="hourlyRate"
                     type="number"
-                    value={newProject.hourlyRate}
-                    onChange={(e) => setNewProject({...newProject, hourlyRate: e.target.value})}
+                    value={newProject.hourly_rate}
+                    onChange={(e) => setNewProject({...newProject, hourly_rate: e.target.value})}
                     placeholder="100"
                   />
                 </div>
-                <Button onClick={handleAddProject} className="w-full">
-                  Create Project
+                <Button 
+                  onClick={handleAddProject} 
+                  className="w-full"
+                  disabled={addProjectMutation.isPending}
+                >
+                  {addProjectMutation.isPending ? 'Creating...' : 'Create Project'}
                 </Button>
               </div>
             </DialogContent>
@@ -207,7 +258,7 @@ const Projects = () => {
                 </div>
                 <CardDescription className="flex items-center space-x-2">
                   <User className="h-4 w-4" />
-                  <span>{project.client}</span>
+                  <span>{project.clients.name}</span>
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -220,18 +271,18 @@ const Projects = () => {
                   <div className="flex items-center justify-between text-sm">
                     <div className="flex items-center space-x-1">
                       <DollarSign className="h-4 w-4 text-green-600" />
-                      <span className="font-medium">${project.hourlyRate}/hr</span>
+                      <span className="font-medium">₹{project.hourly_rate}/hr</span>
                     </div>
                     <div className="flex items-center space-x-1">
                       <Clock className="h-4 w-4 text-blue-600" />
-                      <span>{project.totalHours}h logged</span>
+                      <span>{project.total_hours}h logged</span>
                     </div>
                   </div>
                   <div className="pt-2 border-t">
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-gray-600">Total Value</span>
                       <span className="font-bold text-lg text-green-600">
-                        ${(project.hourlyRate * project.totalHours).toFixed(2)}
+                        ₹{(project.hourly_rate * project.total_hours).toFixed(2)}
                       </span>
                     </div>
                   </div>

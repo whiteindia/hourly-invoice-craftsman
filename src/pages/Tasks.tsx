@@ -9,85 +9,144 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Badge } from '@/components/ui/badge';
 import { Plus, Clock, Play, Pause, Square } from 'lucide-react';
 import { toast } from 'sonner';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+
+interface Task {
+  id: string;
+  name: string;
+  hours: number;
+  status: string;
+  date: string;
+  projects: {
+    name: string;
+    clients: {
+      name: string;
+    };
+  };
+}
+
+interface Project {
+  id: string;
+  name: string;
+  clients: {
+    name: string;
+  };
+}
 
 const Tasks = () => {
-  const [tasks, setTasks] = useState([
-    {
-      id: 1,
-      name: "Server Configuration",
-      project: "DevOps Infrastructure Setup",
-      client: "TechCorp Solutions",
-      hours: 4.5,
-      status: "Completed",
-      date: "2024-01-15"
-    },
-    {
-      id: 2,
-      name: "Market Research",
-      project: "Marketing Strategy Development",
-      client: "StartupXYZ",
-      hours: 3.0,
-      status: "Completed",
-      date: "2024-01-14"
-    },
-    {
-      id: 3,
-      name: "Process Documentation",
-      project: "Business Process Optimization",
-      client: "LocalBiz",
-      hours: 0,
-      status: "In Progress",
-      date: "2024-01-16"
-    }
-  ]);
-
+  const queryClient = useQueryClient();
   const [newTask, setNewTask] = useState({
     name: '',
-    project: '',
+    project_id: '',
     hours: ''
   });
-
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [activeTimer, setActiveTimer] = useState<number | null>(null);
+  const [activeTimer, setActiveTimer] = useState<string | null>(null);
   const [timerSeconds, setTimerSeconds] = useState(0);
 
-  const projects = [
-    "DevOps Infrastructure Setup",
-    "Marketing Strategy Development", 
-    "Business Process Optimization"
-  ];
+  // Fetch tasks with project and client data
+  const { data: tasks = [], isLoading } = useQuery({
+    queryKey: ['tasks'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('tasks')
+        .select(`
+          *,
+          projects(
+            name,
+            clients(name)
+          )
+        `)
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      return data as Task[];
+    }
+  });
+
+  // Fetch projects for dropdown
+  const { data: projects = [] } = useQuery({
+    queryKey: ['projects-with-clients'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('projects')
+        .select(`
+          id,
+          name,
+          clients(name)
+        `);
+      
+      if (error) throw error;
+      return data as Project[];
+    }
+  });
+
+  // Add task mutation
+  const addTaskMutation = useMutation({
+    mutationFn: async (taskData: {
+      name: string;
+      project_id: string;
+      hours: number;
+    }) => {
+      const { data, error } = await supabase
+        .from('tasks')
+        .insert([{
+          ...taskData,
+          status: taskData.hours > 0 ? 'Completed' : 'Not Started'
+        }])
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      setNewTask({ name: '', project_id: '', hours: '' });
+      setIsDialogOpen(false);
+      toast.success('Task added successfully!');
+    },
+    onError: (error) => {
+      toast.error('Failed to add task: ' + error.message);
+    }
+  });
+
+  // Update task hours mutation
+  const updateTaskMutation = useMutation({
+    mutationFn: async ({ id, hours }: { id: string; hours: number }) => {
+      const { data, error } = await supabase
+        .from('tasks')
+        .update({ 
+          hours,
+          status: 'Completed'
+        })
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    }
+  });
 
   const handleAddTask = () => {
-    if (!newTask.name || !newTask.project) {
+    if (!newTask.name || !newTask.project_id) {
       toast.error('Please fill in required fields');
       return;
     }
 
-    const task = {
-      id: tasks.length + 1,
-      ...newTask,
-      client: getClientForProject(newTask.project),
-      hours: parseFloat(newTask.hours) || 0,
-      status: parseFloat(newTask.hours) > 0 ? "Completed" : "Not Started",
-      date: new Date().toISOString().split('T')[0]
-    };
-
-    setTasks([...tasks, task]);
-    setNewTask({ name: '', project: '', hours: '' });
-    setIsDialogOpen(false);
-    toast.success('Task added successfully!');
+    addTaskMutation.mutate({
+      name: newTask.name,
+      project_id: newTask.project_id,
+      hours: parseFloat(newTask.hours) || 0
+    });
   };
 
-  const getClientForProject = (projectName: string) => {
-    const projectClientMap: Record<string, string> = {
-      "DevOps Infrastructure Setup": "TechCorp Solutions",
-      "Marketing Strategy Development": "StartupXYZ",
-      "Business Process Optimization": "LocalBiz"
-    };
-    return projectClientMap[projectName] || "Unknown Client";
-  };
-
-  const startTimer = (taskId: number) => {
+  const startTimer = (taskId: string) => {
     setActiveTimer(taskId);
     setTimerSeconds(0);
     
@@ -95,21 +154,22 @@ const Tasks = () => {
       setTimerSeconds(prev => prev + 1);
     }, 1000);
 
-    // Store interval ID for cleanup
     (window as any).timerInterval = interval;
   };
 
-  const stopTimer = (taskId: number) => {
+  const stopTimer = (taskId: string) => {
     if ((window as any).timerInterval) {
       clearInterval((window as any).timerInterval);
     }
     
     const hours = timerSeconds / 3600;
-    setTasks(tasks.map(task => 
-      task.id === taskId 
-        ? { ...task, hours: task.hours + hours, status: "Completed" }
-        : task
-    ));
+    const task = tasks.find(t => t.id === taskId);
+    if (task) {
+      updateTaskMutation.mutate({
+        id: taskId,
+        hours: task.hours + hours
+      });
+    }
     
     setActiveTimer(null);
     setTimerSeconds(0);
@@ -135,6 +195,14 @@ const Tasks = () => {
         return 'bg-gray-100 text-gray-800';
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
+        <div className="text-lg">Loading tasks...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
@@ -171,13 +239,15 @@ const Tasks = () => {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="project">Project</Label>
-                  <Select value={newTask.project} onValueChange={(value) => setNewTask({...newTask, project: value})}>
+                  <Select value={newTask.project_id} onValueChange={(value) => setNewTask({...newTask, project_id: value})}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select a project" />
                     </SelectTrigger>
                     <SelectContent>
                       {projects.map((project) => (
-                        <SelectItem key={project} value={project}>{project}</SelectItem>
+                        <SelectItem key={project.id} value={project.id}>
+                          {project.name} ({project.clients.name})
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -193,8 +263,12 @@ const Tasks = () => {
                     placeholder="0.0"
                   />
                 </div>
-                <Button onClick={handleAddTask} className="w-full">
-                  Add Task
+                <Button 
+                  onClick={handleAddTask} 
+                  className="w-full"
+                  disabled={addTaskMutation.isPending}
+                >
+                  {addTaskMutation.isPending ? 'Adding...' : 'Add Task'}
                 </Button>
               </div>
             </DialogContent>
@@ -209,7 +283,7 @@ const Tasks = () => {
                   <div className="flex-1">
                     <CardTitle className="text-lg">{task.name}</CardTitle>
                     <CardDescription className="mt-1">
-                      {task.project} • {task.client}
+                      {task.projects.name} • {task.projects.clients.name}
                     </CardDescription>
                   </div>
                   <Badge className={getStatusColor(task.status)}>

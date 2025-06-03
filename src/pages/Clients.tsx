@@ -7,66 +7,105 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Plus, Mail, Phone, Building, Edit, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+
+interface Client {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  company?: string;
+  projects?: { count: number }[];
+}
 
 const Clients = () => {
-  const [clients, setClients] = useState([
-    {
-      id: 1,
-      name: "TechCorp Solutions",
-      email: "contact@techcorp.com",
-      phone: "+1 (555) 123-4567",
-      company: "TechCorp Solutions",
-      projects: 3
-    },
-    {
-      id: 2,
-      name: "StartupXYZ",
-      email: "hello@startupxyz.com",
-      phone: "+1 (555) 987-6543",
-      company: "StartupXYZ Inc.",
-      projects: 1
-    },
-    {
-      id: 3,
-      name: "LocalBiz",
-      email: "info@localbiz.com",
-      phone: "+1 (555) 456-7890",
-      company: "Local Business LLC",
-      projects: 2
-    }
-  ]);
-
+  const queryClient = useQueryClient();
   const [newClient, setNewClient] = useState({
     name: '',
     email: '',
     phone: '',
     company: ''
   });
-
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+
+  // Fetch clients with project count
+  const { data: clients = [], isLoading } = useQuery({
+    queryKey: ['clients'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('clients')
+        .select(`
+          *,
+          projects(count)
+        `);
+      
+      if (error) throw error;
+      return data as Client[];
+    }
+  });
+
+  // Add client mutation
+  const addClientMutation = useMutation({
+    mutationFn: async (clientData: typeof newClient) => {
+      const { data, error } = await supabase
+        .from('clients')
+        .insert([clientData])
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['clients'] });
+      setNewClient({ name: '', email: '', phone: '', company: '' });
+      setIsDialogOpen(false);
+      toast.success('Client added successfully!');
+    },
+    onError: (error) => {
+      toast.error('Failed to add client: ' + error.message);
+    }
+  });
+
+  // Delete client mutation
+  const deleteClientMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('clients')
+        .delete()
+        .eq('id', id);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['clients'] });
+      toast.success('Client deleted successfully!');
+    },
+    onError: (error) => {
+      toast.error('Failed to delete client: ' + error.message);
+    }
+  });
 
   const handleAddClient = () => {
     if (!newClient.name || !newClient.email) {
       toast.error('Please fill in required fields');
       return;
     }
-
-    const client = {
-      id: clients.length + 1,
-      ...newClient,
-      projects: 0
-    };
-
-    setClients([...clients, client]);
-    setNewClient({ name: '', email: '', phone: '', company: '' });
-    setIsDialogOpen(false);
-    toast.success('Client added successfully!');
+    addClientMutation.mutate(newClient);
   };
 
-  const handleDeleteClient = (id: number) => {
-    setClients(clients.filter(client => client.id !== id));
-    toast.success('Client deleted successfully!');
+  const handleDeleteClient = (id: string) => {
+    deleteClientMutation.mutate(id);
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
+        <div className="text-lg">Loading clients...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
@@ -129,8 +168,12 @@ const Clients = () => {
                     placeholder="Company name"
                   />
                 </div>
-                <Button onClick={handleAddClient} className="w-full">
-                  Add Client
+                <Button 
+                  onClick={handleAddClient} 
+                  className="w-full"
+                  disabled={addClientMutation.isPending}
+                >
+                  {addClientMutation.isPending ? 'Adding...' : 'Add Client'}
                 </Button>
               </div>
             </DialogContent>
@@ -155,6 +198,7 @@ const Clients = () => {
                       size="sm" 
                       onClick={() => handleDeleteClient(client.id)}
                       className="text-red-600 hover:text-red-700"
+                      disabled={deleteClientMutation.isPending}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -175,7 +219,7 @@ const Clients = () => {
                   )}
                   <div className="flex items-center space-x-2 text-sm text-gray-600">
                     <Building className="h-4 w-4" />
-                    <span>{client.projects} active projects</span>
+                    <span>{client.projects?.[0]?.count || 0} active projects</span>
                   </div>
                 </div>
               </CardContent>
