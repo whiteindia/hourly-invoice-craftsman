@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -79,9 +78,14 @@ const Projects = () => {
           clients(name)
         `);
 
-      // Only show Active and Completed projects by default
-      const statusFilter: ProjectStatus[] = ['Active', 'Completed'];
-      query = query.in('status', statusFilter);
+      // Filter by status - only apply if not "all-statuses"
+      if (filters.status !== 'all-statuses') {
+        query = query.eq('status', filters.status as ProjectStatus);
+      } else {
+        // Only show Active and Completed projects by default when no specific status is selected
+        const statusFilter: ProjectStatus[] = ['Active', 'Completed'];
+        query = query.in('status', statusFilter);
+      }
 
       // Filter by year
       if (filters.year) {
@@ -93,11 +97,6 @@ const Projects = () => {
       // Filter by client
       if (filters.client_id && filters.client_id !== 'all-clients') {
         query = query.eq('client_id', filters.client_id);
-      }
-
-      // Filter by status
-      if (filters.status !== 'all-statuses') {
-        query = query.eq('status', filters.status);
       }
 
       const { data, error } = await query.order('created_at', { ascending: false });
