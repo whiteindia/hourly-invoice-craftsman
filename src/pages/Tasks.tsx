@@ -716,71 +716,77 @@ const Tasks = () => {
                 No tasks found matching your filters.
               </div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Project</TableHead>
-                    <TableHead>Assignee</TableHead>
-                    <TableHead>Assigner</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Time Logged</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredTasks.map((task) => (
-                    <TableRow key={task.id}>
-                      <TableCell className="font-medium">{task.name}</TableCell>
-                      <TableCell>{task.projects?.name}</TableCell>
-                      <TableCell>{task.employees?.name}</TableCell>
-                      <TableCell>{task.assigners?.name || 'N/A'}</TableCell>
-                      <TableCell>
-                        <Badge className={
-                          task.status === 'Not Started' ? 'bg-gray-100 text-gray-800' :
-                          task.status === 'In Progress' ? 'bg-blue-100 text-blue-800' :
-                          'bg-green-100 text-green-800'
-                        }>
-                          {task.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{task.hours ? task.hours + ' hours' : '0 hours'}</TableCell>
-                      <TableCell>
-                        <div className="flex space-x-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setEditingTask(task);
-                              setIsEditDialogOpen(true);
-                            }}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setSelectedTaskForComment(task);
-                              setIsCommentDialogOpen(true);
-                            }}
-                          >
-                            <MessageCircle className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleDeleteTask(task.id)}
-                            className="text-red-600 hover:text-red-700"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+              <div className="space-y-4">
+                {filteredTasks.map((task) => (
+                  <div key={task.id} className="border rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-4">
+                          <h3 className="font-medium">{task.name}</h3>
+                          <span className="text-sm text-gray-500">{task.projects?.name}</span>
+                          <span className="text-sm text-gray-500">{task.employees?.name}</span>
+                          <span className="text-sm text-gray-500">{task.assigners?.name || 'N/A'}</span>
+                          <Badge className={
+                            task.status === 'Not Started' ? 'bg-gray-100 text-gray-800' :
+                            task.status === 'In Progress' ? 'bg-blue-100 text-blue-800' :
+                            'bg-green-100 text-green-800'
+                          }>
+                            {task.status}
+                          </Badge>
+                          <span className="text-sm text-gray-500">{task.hours ? task.hours + ' hours' : '0 hours'}</span>
                         </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <TimeTrackerWithComment
+                          task={{ id: task.id, name: task.name }}
+                          onSuccess={() => queryClient.invalidateQueries({ queryKey: ['tasks'] })}
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center space-x-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setEditingTask(task);
+                          setIsEditDialogOpen(true);
+                        }}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => toggleHistory(task.id)}
+                      >
+                        <History className="h-4 w-4 mr-1" />
+                        History
+                      </Button>
+                      
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDeleteTask(task.id)}
+                        className="text-red-600 hover:text-red-700"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+
+                    {/* Collapsible History */}
+                    <Collapsible open={expandedHistories.has(task.id)}>
+                      <CollapsibleContent className="mt-4 pt-4 border-t">
+                        <TaskHistory
+                          taskId={task.id}
+                          onUpdate={() => queryClient.invalidateQueries({ queryKey: ['tasks'] })}
+                        />
+                      </CollapsibleContent>
+                    </Collapsible>
+                  </div>
+                ))}
+              </div>
             )}
           </CardContent>
         </Card>
