@@ -2,13 +2,12 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Plus, Calendar, CheckCircle, Clock, AlertCircle } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { CheckCircle, Clock, AlertCircle } from 'lucide-react';
 import SprintDialog from '@/components/SprintDialog';
 import SprintCard from '@/components/SprintCard';
+import SprintsHeader from '@/components/SprintsHeader';
+import SprintsFilters from '@/components/SprintsFilters';
+import SprintsEmptyState from '@/components/SprintsEmptyState';
 import Navigation from '@/components/Navigation';
 import { toast } from '@/hooks/use-toast';
 
@@ -31,6 +30,7 @@ interface Task {
   hours: number;
   projects?: {
     name: string;
+    type: string;
     clients: {
       name: string;
     };
@@ -52,7 +52,7 @@ const Sprints = () => {
   const [selectedAssignee, setSelectedAssignee] = useState<string>('all');
   const [selectedAssigner, setSelectedAssigner] = useState<string>('all');
   const [selectedService, setSelectedService] = useState<string>('all');
-  const [selectedStatus, setSelectedStatus] = useState<string>('active'); // Hide completed by default
+  const [selectedStatus, setSelectedStatus] = useState<string>('active');
   const [selectedYear, setSelectedYear] = useState<string>('all');
   const [selectedMonth, setSelectedMonth] = useState<string>('all');
   const [globalServiceFilter, setGlobalServiceFilter] = useState<string>('all');
@@ -190,14 +190,8 @@ const Sprints = () => {
     }
   });
 
-  // Generate available years and months from sprints
+  // Generate available years from sprints
   const availableYears = [...new Set(sprints.map(sprint => new Date(sprint.deadline).getFullYear()))].sort((a, b) => b - a);
-  const months = [
-    { value: '0', label: 'January' }, { value: '1', label: 'February' }, { value: '2', label: 'March' },
-    { value: '3', label: 'April' }, { value: '4', label: 'May' }, { value: '5', label: 'June' },
-    { value: '6', label: 'July' }, { value: '7', label: 'August' }, { value: '8', label: 'September' },
-    { value: '9', label: 'October' }, { value: '10', label: 'November' }, { value: '11', label: 'December' }
-  ];
 
   // Enhanced filter logic
   const filteredSprints = sprints.filter(sprint => {
@@ -413,6 +407,11 @@ const Sprints = () => {
 
   const hasActiveFilters = selectedClient !== 'all' || selectedProject !== 'all' || selectedAssignee !== 'all' || selectedAssigner !== 'all' || selectedService !== 'all' || selectedStatus !== 'active' || selectedYear !== 'all' || selectedMonth !== 'all' || globalServiceFilter !== 'all';
 
+  const handleCreateSprint = () => {
+    setEditingSprint(null);
+    setDialogOpen(true);
+  };
+
   if (isLoading) {
     return (
       <Navigation>
@@ -428,241 +427,48 @@ const Sprints = () => {
   return (
     <Navigation>
       <div className="container mx-auto p-6">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold">Sprints</h1>
-          <div className="flex items-center gap-4">
-            <div className="w-48">
-              <Select value={globalServiceFilter} onValueChange={setGlobalServiceFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Filter by Service" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Services</SelectItem>
-                  {services.map((service) => (
-                    <SelectItem key={service.id} value={service.name}>
-                      {service.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <Button onClick={() => {
-              setEditingSprint(null);
-              setDialogOpen(true);
-            }}>
-              <Plus className="h-4 w-4 mr-2" />
-              Create Sprint
-            </Button>
-          </div>
-        </div>
+        <SprintsHeader
+          globalServiceFilter={globalServiceFilter}
+          setGlobalServiceFilter={setGlobalServiceFilter}
+          services={services}
+          onCreateSprint={handleCreateSprint}
+        />
 
-        <Card className="mb-6">
-          <CardHeader>
-            <div className="flex justify-between items-center">
-              <CardTitle>Filters</CardTitle>
-              {hasActiveFilters && (
-                <Button variant="outline" size="sm" onClick={resetFilters}>
-                  Clear Filters
-                </Button>
-              )}
-            </div>
-          </CardHeader>
-          <CardContent>
-            {/* First row - Date and Status filters */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-              <div>
-                <label className="block text-sm font-medium mb-2">Status</label>
-                <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Sprint Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Sprints</SelectItem>
-                    <SelectItem value="active">Active Sprints (Hide Completed)</SelectItem>
-                    <SelectItem value="Not Started">Not Started</SelectItem>
-                    <SelectItem value="In Progress">In Progress</SelectItem>
-                    <SelectItem value="Completed">Completed</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-2">Year</label>
-                <Select value={selectedYear} onValueChange={setSelectedYear}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="All Years" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Years</SelectItem>
-                    {availableYears.map((year) => (
-                      <SelectItem key={year} value={year.toString()}>
-                        {year}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-2">Month</label>
-                <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="All Months" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Months</SelectItem>
-                    {months.map((month) => (
-                      <SelectItem key={month.value} value={month.value}>
-                        {month.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* Second row - Task-based filters */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div>
-                <label className="block text-sm font-medium mb-2">Client</label>
-                <Select value={selectedClient} onValueChange={setSelectedClient}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="All Clients" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Clients</SelectItem>
-                    {clients.map((client) => (
-                      <SelectItem key={client.id} value={client.id}>
-                        {client.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-2">Project</label>
-                <Select value={selectedProject} onValueChange={setSelectedProject}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="All Projects" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Projects</SelectItem>
-                    {projects.map((project) => (
-                      <SelectItem key={project.id} value={project.id}>
-                        {project.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-2">Assignee</label>
-                <Select value={selectedAssignee} onValueChange={setSelectedAssignee}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="All Assignees" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Assignees</SelectItem>
-                    {employees.map((employee) => (
-                      <SelectItem key={employee.id} value={employee.id}>
-                        {employee.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-2">Service</label>
-                <Select value={selectedService} onValueChange={setSelectedService}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="All Services" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Services</SelectItem>
-                    {services.map((service) => (
-                      <SelectItem key={service.id} value={service.id}>
-                        {service.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            
-            {hasActiveFilters && (
-              <div className="mt-4 flex flex-wrap gap-2">
-                {globalServiceFilter !== 'all' && (
-                  <Badge variant="secondary">
-                    Service: {services.find(s => s.name === globalServiceFilter)?.name}
-                  </Badge>
-                )}
-                {selectedStatus !== 'active' && (
-                  <Badge variant="secondary">
-                    Status: {selectedStatus === 'all' ? 'All' : selectedStatus}
-                  </Badge>
-                )}
-                {selectedYear !== 'all' && (
-                  <Badge variant="secondary">Year: {selectedYear}</Badge>
-                )}
-                {selectedMonth !== 'all' && (
-                  <Badge variant="secondary">
-                    Month: {months.find(m => m.value === selectedMonth)?.label}
-                  </Badge>
-                )}
-                {selectedClient !== 'all' && (
-                  <Badge variant="secondary">
-                    Client: {clients.find(c => c.id === selectedClient)?.name}
-                  </Badge>
-                )}
-                {selectedProject !== 'all' && (
-                  <Badge variant="secondary">
-                    Project: {projects.find(p => p.id === selectedProject)?.name}
-                  </Badge>
-                )}
-                {selectedAssignee !== 'all' && (
-                  <Badge variant="secondary">
-                    Assignee: {employees.find(e => e.id === selectedAssignee)?.name}
-                  </Badge>
-                )}
-                {selectedService !== 'all' && (
-                  <Badge variant="secondary">
-                    Task Service: {services.find(s => s.name === selectedService)?.name}
-                  </Badge>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <SprintsFilters
+          selectedClient={selectedClient}
+          setSelectedClient={setSelectedClient}
+          selectedProject={selectedProject}
+          setSelectedProject={setSelectedProject}
+          selectedAssignee={selectedAssignee}
+          setSelectedAssignee={setSelectedAssignee}
+          selectedAssigner={selectedAssigner}
+          setSelectedAssigner={setSelectedAssigner}
+          selectedService={selectedService}
+          setSelectedService={setSelectedService}
+          selectedStatus={selectedStatus}
+          setSelectedStatus={setSelectedStatus}
+          selectedYear={selectedYear}
+          setSelectedYear={setSelectedYear}
+          selectedMonth={selectedMonth}
+          setSelectedMonth={setSelectedMonth}
+          globalServiceFilter={globalServiceFilter}
+          clients={clients}
+          projects={projects}
+          employees={employees}
+          services={services}
+          availableYears={availableYears}
+          hasActiveFilters={hasActiveFilters}
+          resetFilters={resetFilters}
+        />
 
         <div className="space-y-6">
           {filteredSprints.length === 0 ? (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-12">
-                <Calendar className="h-12 w-12 text-gray-400 mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">No sprints found</h3>
-                <p className="text-gray-500 text-center mb-4">
-                  {sprints.length === 0 
-                    ? "Get started by creating your first sprint to organize your tasks."
-                    : "No sprints match the current filters. Try adjusting your filter criteria."
-                  }
-                </p>
-                {hasActiveFilters && (
-                  <Button variant="outline" onClick={resetFilters} className="mb-4">
-                    Clear Filters
-                  </Button>
-                )}
-                <Button onClick={() => {
-                  setEditingSprint(null);
-                  setDialogOpen(true);
-                }}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Create Sprint
-                </Button>
-              </CardContent>
-            </Card>
+            <SprintsEmptyState
+              sprintsLength={sprints.length}
+              hasActiveFilters={hasActiveFilters}
+              resetFilters={resetFilters}
+              onCreateSprint={handleCreateSprint}
+            />
           ) : (
             filteredSprints.map((sprint) => (
               <SprintCard
