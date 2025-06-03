@@ -4,6 +4,14 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { logProjectCreated, logProjectUpdated, logActivity } from '@/utils/activityLogger';
 
+interface ProjectData {
+  id: string;
+  name: string;
+  clients?: {
+    name: string;
+  };
+}
+
 export const useProjectOperations = () => {
   const queryClient = useQueryClient();
 
@@ -115,7 +123,7 @@ export const useProjectOperations = () => {
 
   // Mutation to delete a project with proper cascade handling
   const deleteProjectMutation = useMutation({
-    mutationFn: async (id: string) => {
+    mutationFn: async (id: string): Promise<{ id: string; projectData: ProjectData }> => {
       console.log('Starting project deletion for ID:', id);
       
       // Get project details for logging before deletion
@@ -198,7 +206,7 @@ export const useProjectOperations = () => {
       }
 
       console.log('Project deletion completed successfully');
-      return { id, projectData };
+      return { id, projectData: projectData as ProjectData };
     },
     onSuccess: async (result) => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });

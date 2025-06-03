@@ -292,6 +292,7 @@ const Projects = () => {
           onCreateProject={handleCreateProject}
           onUpdateProject={handleUpdateProject}
           onViewBRD={openBRDFile}
+          onSetEditingProject={handleEditProject}
         />
       </div>
     </Navigation>

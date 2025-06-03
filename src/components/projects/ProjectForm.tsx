@@ -46,7 +46,6 @@ interface ProjectFormProps {
   };
   setNewProject: (project: any) => void;
   editingProject: ProjectData | null;
-  setEditingProject: (project: ProjectData | null) => void;
   editBillingType: 'hourly' | 'project';
   setEditBillingType: (type: 'hourly' | 'project') => void;
   editBrdFile: File | null;
@@ -59,13 +58,13 @@ interface ProjectFormProps {
   onCreateProject: () => void;
   onUpdateProject: () => void;
   onViewBRD: (url: string) => void;
+  onSetEditingProject: (project: ProjectData) => void;
 }
 
 const ProjectForm = ({ 
   newProject, 
   setNewProject, 
   editingProject, 
-  setEditingProject, 
   editBillingType, 
   setEditBillingType, 
   editBrdFile, 
@@ -77,7 +76,8 @@ const ProjectForm = ({
   uploadingBRD, 
   onCreateProject, 
   onUpdateProject, 
-  onViewBRD 
+  onViewBRD,
+  onSetEditingProject
 }: ProjectFormProps) => {
   const { createProjectMutation, updateProjectMutation } = useProjectOperations();
 
@@ -274,13 +274,13 @@ const ProjectForm = ({
                 <Input
                   id="editProjectName"
                   value={editingProject.name}
-                  onChange={(e) => setEditingProject({...editingProject, name: e.target.value})}
+                  onChange={(e) => onSetEditingProject({...editingProject, name: e.target.value})}
                   placeholder="e.g., New Website Design"
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="editClient">Client</Label>
-                <Select onValueChange={(value) => setEditingProject({...editingProject, client_id: value})}>
+                <Select onValueChange={(value) => onSetEditingProject({...editingProject, client_id: value})}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select a client" defaultValue={editingProject.client_id} />
                   </SelectTrigger>
@@ -293,7 +293,7 @@ const ProjectForm = ({
               </div>
               <div className="space-y-2">
                 <Label htmlFor="editType">Service Type</Label>
-                <Select onValueChange={(value) => setEditingProject({...editingProject, type: value})}>
+                <Select onValueChange={(value) => onSetEditingProject({...editingProject, type: value})}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select service type" defaultValue={editingProject.type} />
                   </SelectTrigger>
@@ -323,7 +323,7 @@ const ProjectForm = ({
                     id="editHourlyRate"
                     type="number"
                     value={editingProject.hourly_rate}
-                    onChange={(e) => setEditingProject({...editingProject, hourly_rate: parseFloat(e.target.value) || 0})}
+                    onChange={(e) => onSetEditingProject({...editingProject, hourly_rate: parseFloat(e.target.value) || 0})}
                     placeholder="e.g., 50.00"
                   />
                 </div>
@@ -335,7 +335,7 @@ const ProjectForm = ({
                     id="editProjectAmount"
                     type="number"
                     value={editingProject.project_amount || 0}
-                    onChange={(e) => setEditingProject({...editingProject, project_amount: parseFloat(e.target.value) || 0})}
+                    onChange={(e) => onSetEditingProject({...editingProject, project_amount: parseFloat(e.target.value) || 0})}
                     placeholder="e.g., 5000.00"
                   />
                 </div>
@@ -346,7 +346,7 @@ const ProjectForm = ({
                   id="editStartDate"
                   type="date"
                   value={editingProject.start_date?.split('T')[0] || ''}
-                  onChange={(e) => setEditingProject({...editingProject, start_date: e.target.value})}
+                  onChange={(e) => onSetEditingProject({...editingProject, start_date: e.target.value})}
                 />
               </div>
               <div className="space-y-2">
@@ -355,12 +355,12 @@ const ProjectForm = ({
                   id="editDeadline"
                   type="date"
                   value={editingProject.deadline?.split('T')[0] || ''}
-                  onChange={(e) => setEditingProject({...editingProject, deadline: e.target.value})}
+                  onChange={(e) => onSetEditingProject({...editingProject, deadline: e.target.value})}
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="editStatus">Status</Label>
-                <Select onValueChange={(value) => setEditingProject({...editingProject, status: value})}>
+                <Select onValueChange={(value) => onSetEditingProject({...editingProject, status: value})}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select status" defaultValue={editingProject.status} />
                   </SelectTrigger>
@@ -395,7 +395,6 @@ const ProjectForm = ({
           <div className="flex justify-end space-x-2 mt-4">
             <Button variant="outline" onClick={() => {
               setIsEditDialogOpen(false);
-              setEditingProject(null);
               setEditBrdFile(null);
             }}>
               Cancel

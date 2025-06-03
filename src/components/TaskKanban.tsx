@@ -128,11 +128,11 @@ const TaskKanban = ({ tasks: externalTasks, onTaskStatusChange: externalOnTaskSt
         assigner_id: task.assigner_id,
         assignee_id: task.assignee_id,
         status: task.status as 'Not Started' | 'In Progress' | 'Completed',
-        priority: task.priority || 'Medium',
-        due_date: task.due_date || null,
-        estimated_hours: task.estimated_hours || null,
-        actual_hours: task.actual_hours || null,
-        comments: task.comments || null,
+        priority: 'Medium', // Default priority since it's not in the database
+        due_date: task.deadline || null,
+        estimated_hours: task.estimated_duration || null,
+        actual_hours: task.hours || null,
+        comments: null, // Not available in database
         deadline: task.deadline || null,
         hours: task.hours || 0,
         projects: task.projects,
@@ -273,6 +273,9 @@ const TaskKanban = ({ tasks: externalTasks, onTaskStatusChange: externalOnTaskSt
   const updateTaskStatus = async (taskId: string, newStatus: string) => {
     const task = tasks?.find(t => t.id === taskId);
     if (!task) return;
+
+    // Ensure the status is valid
+    if (!taskStatuses.includes(newStatus as any)) return;
 
     const oldStatus = task.status;
     
@@ -422,7 +425,7 @@ const TaskKanban = ({ tasks: externalTasks, onTaskStatusChange: externalOnTaskSt
                         )}
                       </div>
                     </div>
-                    <p className="text-xs mt-1">{task.description}</p>
+                    <p className="text-xs mt-1">{task.description || 'No description'}</p>
                     <div className="flex items-center space-x-2 mt-2">
                       <Avatar className="h-5 w-5">
                         <AvatarImage src={`https://avatar.vercel.sh/${task.assignee?.name || task.employees?.name}.png`} />
@@ -431,7 +434,7 @@ const TaskKanban = ({ tasks: externalTasks, onTaskStatusChange: externalOnTaskSt
                       <span className="text-gray-500 text-xs">{task.assignee?.name || task.employees?.name}</span>
                     </div>
                     <div className="flex items-center space-x-3 mt-3">
-                      <Badge variant="secondary">{task.priority}</Badge>
+                      <Badge variant="secondary">{task.priority || 'Medium'}</Badge>
                       {(task.due_date || task.deadline) && (
                         <div className="flex items-center space-x-1 text-gray-500">
                           <CalendarIcon className="h-3 w-3" />
