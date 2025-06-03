@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -34,8 +33,6 @@ interface ProjectData {
 }
 
 interface ProjectFormProps {
-  clients: Client[];
-  services: Service[];
   newProject: {
     name: string;
     client_id: string;
@@ -65,8 +62,6 @@ interface ProjectFormProps {
 }
 
 const ProjectForm = ({ 
-  clients, 
-  services, 
   newProject, 
   setNewProject, 
   editingProject, 
@@ -85,6 +80,33 @@ const ProjectForm = ({
   onViewBRD 
 }: ProjectFormProps) => {
   const { createProjectMutation, updateProjectMutation } = useProjectOperations();
+
+  // Fetch clients and services for dropdowns
+  const { data: clients = [] } = useQuery({
+    queryKey: ['clients'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('clients')
+        .select('id, name')
+        .order('name');
+      
+      if (error) throw error;
+      return data as Client[];
+    }
+  });
+
+  const { data: services = [] } = useQuery({
+    queryKey: ['services'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('services')
+        .select('id, name')
+        .order('name');
+      
+      if (error) throw error;
+      return data as Service[];
+    }
+  });
 
   const handleCreateSubmit = () => {
     onCreateProject();

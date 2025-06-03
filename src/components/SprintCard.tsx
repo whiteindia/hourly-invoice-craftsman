@@ -8,7 +8,7 @@ import { ChevronDown, ChevronRight, Calendar, Edit, Trash2 } from 'lucide-react'
 import { format } from 'date-fns';
 import TaskKanban from '@/components/TaskKanban';
 
-interface Task {
+interface SprintTask {
   id: string;
   name: string;
   status: 'Not Started' | 'In Progress' | 'Completed';
@@ -34,7 +34,7 @@ interface Sprint {
   status: 'Not Started' | 'In Progress' | 'Completed';
   created_at: string;
   updated_at: string;
-  tasks: Task[];
+  tasks: SprintTask[];
 }
 
 interface SprintCardProps {
@@ -59,6 +59,29 @@ const SprintCard: React.FC<SprintCardProps> = ({
   const completedTasks = sprint.tasks.filter(t => t.status === 'Completed').length;
   const totalTasks = sprint.tasks.length;
   const progressPercentage = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
+
+  // Transform sprint tasks to TaskKanban format
+  const transformedTasks = sprint.tasks.map(task => ({
+    id: task.id,
+    created_at: new Date().toISOString(), // Use current time as fallback
+    name: task.name,
+    description: null,
+    project_id: task.project_id,
+    assigner_id: null,
+    assignee_id: task.assignee_id,
+    status: task.status,
+    priority: 'Medium' as const,
+    due_date: task.deadline,
+    estimated_hours: null,
+    actual_hours: null,
+    comments: null,
+    deadline: task.deadline,
+    hours: task.hours,
+    projects: task.projects,
+    assignee: task.employees,
+    assigner: null,
+    employees: task.employees
+  }));
 
   return (
     <Card className="w-full">
@@ -138,7 +161,7 @@ const SprintCard: React.FC<SprintCardProps> = ({
               </div>
             ) : (
               <TaskKanban
-                tasks={sprint.tasks}
+                tasks={transformedTasks}
                 onTaskStatusChange={(taskId, newStatus) => 
                   onTaskStatusChange(taskId, newStatus, sprint.id)
                 }

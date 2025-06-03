@@ -87,7 +87,7 @@ const TaskKanban = ({ tasks: externalTasks, onTaskStatusChange: externalOnTaskSt
     comments: ''
   });
 
-  const taskStatuses = ['Not Started', 'In Progress', 'Completed', 'On Hold', 'Cancelled'];
+  const taskStatuses: ('Not Started' | 'In Progress' | 'Completed' | 'On Hold' | 'Cancelled')[] = ['Not Started', 'In Progress', 'Completed', 'On Hold', 'Cancelled'];
   const taskPriorities = ['High', 'Medium', 'Low'];
 
   const { data: fetchedTasks, isLoading: isTasksLoading } = useQuery({
@@ -128,7 +128,7 @@ const TaskKanban = ({ tasks: externalTasks, onTaskStatusChange: externalOnTaskSt
         assigner_id: task.assigner_id,
         assignee_id: task.assignee_id,
         status: task.status as 'Not Started' | 'In Progress' | 'Completed',
-        priority: task.priority || null,
+        priority: task.priority || 'Medium',
         due_date: task.due_date || null,
         estimated_hours: task.estimated_hours || null,
         actual_hours: task.actual_hours || null,
