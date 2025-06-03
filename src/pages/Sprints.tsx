@@ -134,7 +134,7 @@ const Sprints = () => {
 
   // Update task status mutation
   const updateTaskStatus = useMutation({
-    mutationFn: async ({ taskId, status }: { taskId: string; status: string }) => {
+    mutationFn: async ({ taskId, status }: { taskId: string; status: 'Not Started' | 'In Progress' | 'Completed' }) => {
       const { error } = await supabase
         .from('tasks')
         .update({ status })
