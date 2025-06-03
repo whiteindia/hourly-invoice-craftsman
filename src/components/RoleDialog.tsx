@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import {
   Dialog,
@@ -38,7 +37,7 @@ const RoleDialog: React.FC<RoleDialogProps> = ({ open, onClose, role, isEditing 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const pages = ['dashboard', 'clients', 'employees', 'projects', 'tasks', 'invoices', 'payments', 'services', 'wages'];
+  const pages = ['dashboard', 'clients', 'employees', 'projects', 'tasks', 'sprints', 'invoices', 'payments', 'services', 'wages'];
   const operations: CrudOperation[] = ['create', 'read', 'update', 'delete'];
 
   // Map of common role names to standardized values
