@@ -104,7 +104,7 @@ function App() {
               <Route
                 path="/privileges"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requireSuperAdmin={true}>
                     <Privileges />
                   </ProtectedRoute>
                 }

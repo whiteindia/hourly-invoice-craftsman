@@ -380,6 +380,36 @@ export type Database = {
           },
         ]
       }
+      role_privileges: {
+        Row: {
+          allowed: boolean
+          created_at: string | null
+          id: string
+          operation: Database["public"]["Enums"]["crud_operation"]
+          page_name: string
+          role: Database["public"]["Enums"]["app_role"]
+          updated_at: string | null
+        }
+        Insert: {
+          allowed?: boolean
+          created_at?: string | null
+          id?: string
+          operation: Database["public"]["Enums"]["crud_operation"]
+          page_name: string
+          role: Database["public"]["Enums"]["app_role"]
+          updated_at?: string | null
+        }
+        Update: {
+          allowed?: boolean
+          created_at?: string | null
+          id?: string
+          operation?: Database["public"]["Enums"]["crud_operation"]
+          page_name?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       services: {
         Row: {
           created_at: string
@@ -613,6 +643,7 @@ export type Database = {
         | "employee"
         | "associate"
         | "teamlead"
+      crud_operation: "create" | "read" | "update" | "delete"
       invoice_status: "Draft" | "Sent" | "Paid" | "Overdue"
       project_status: "Active" | "Completed" | "On Hold"
       project_type:
@@ -747,6 +778,7 @@ export const Constants = {
         "associate",
         "teamlead",
       ],
+      crud_operation: ["create", "read", "update", "delete"],
       invoice_status: ["Draft", "Sent", "Paid", "Overdue"],
       project_status: ["Active", "Completed", "On Hold"],
       project_type: [
