@@ -67,13 +67,13 @@ const Tasks = () => {
         `)
         .order('date', { ascending: false });
 
-      if (filters.project) {
+      if (filters.project && filters.project !== 'all') {
         query = query.eq('project_id', filters.project);
       }
-      if (filters.status) {
+      if (filters.status && filters.status !== 'all') {
         query = query.eq('status', filters.status);
       }
-      if (filters.billing) {
+      if (filters.billing && filters.billing !== 'all') {
         query = query.eq('invoiced', filters.billing === 'billed');
       }
 

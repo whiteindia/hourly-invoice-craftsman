@@ -10,18 +10,29 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 
+interface Task {
+  id: string;
+  name: string;
+  project_id: string;
+  status: 'Not Started' | 'In Progress' | 'Completed';
+  hours: number;
+  date: string;
+  invoiced: boolean;
+  projects: { name: string; clients: { name: string } };
+}
+
 interface TaskCommentDialogProps {
+  task: Task | null;
   isOpen: boolean;
-  onClose: () => void;
-  taskId: string;
-  onTimeLogged: (hours: number) => void;
+  onOpenChange: (open: boolean) => void;
+  onSuccess: () => void;
 }
 
 const TaskCommentDialog: React.FC<TaskCommentDialogProps> = ({
+  task,
   isOpen,
-  onClose,
-  taskId,
-  onTimeLogged
+  onOpenChange,
+  onSuccess
 }) => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -30,10 +41,12 @@ const TaskCommentDialog: React.FC<TaskCommentDialogProps> = ({
 
   const addCommentMutation = useMutation({
     mutationFn: async ({ comment, hours }: { comment: string; hours: number }) => {
+      if (!task) throw new Error('No task selected');
+      
       const { data, error } = await supabase
         .from('task_comments')
         .insert([{
-          task_id: taskId,
+          task_id: task.id,
           comment,
           hours_logged: hours,
           user_id: user?.id
@@ -45,11 +58,12 @@ const TaskCommentDialog: React.FC<TaskCommentDialogProps> = ({
       return data;
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['task-comments', taskId] });
-      onTimeLogged(data.hours_logged);
+      queryClient.invalidateQueries({ queryKey: ['task-comments'] });
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      onSuccess();
       setComment('');
       setHoursLogged('');
-      onClose();
+      onOpenChange(false);
       toast.success('Comment and time logged successfully!');
     },
     onError: (error) => {
@@ -67,13 +81,15 @@ const TaskCommentDialog: React.FC<TaskCommentDialogProps> = ({
     addCommentMutation.mutate({ comment: comment.trim(), hours });
   };
 
+  if (!task) return null;
+
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Log Time & Add Comment</DialogTitle>
           <DialogDescription>
-            Add a comment and log the time spent on this task.
+            Add a comment and log the time spent on "{task.name}".
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
@@ -99,7 +115,7 @@ const TaskCommentDialog: React.FC<TaskCommentDialogProps> = ({
             />
           </div>
           <div className="flex justify-end space-x-2">
-            <Button variant="outline" onClick={onClose}>
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
             <Button 
