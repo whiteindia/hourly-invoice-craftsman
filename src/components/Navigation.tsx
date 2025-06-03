@@ -11,7 +11,8 @@ import {
   FileText, 
   DollarSign,
   Settings,
-  LogOut
+  LogOut,
+  Wallet
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
@@ -26,9 +27,10 @@ const Navigation = () => {
     { path: '/employees', label: 'Employees', icon: UserCheck },
     { path: '/projects', label: 'Projects', icon: FolderOpen },
     { path: '/tasks', label: 'Tasks', icon: CheckSquare },
-    { path: '/invoices', label: 'Invoices', icon: FileText },
-    { path: '/payments', label: 'Payments', icon: DollarSign },
+    ...(userRole === 'admin' || userRole === 'accountant' ? [{ path: '/invoices', label: 'Invoices', icon: FileText }] : []),
+    ...(userRole === 'admin' || userRole === 'accountant' ? [{ path: '/payments', label: 'Payments', icon: DollarSign }] : []),
     { path: '/services', label: 'Services', icon: Settings },
+    { path: '/wages', label: 'Wages', icon: Wallet },
   ];
 
   const isActive = (path: string) => location.pathname === path;
@@ -39,7 +41,7 @@ const Navigation = () => {
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center space-x-8">
             <Link to="/" className="text-xl font-bold text-blue-600">
-              FreelanceHub
+              WhiteIndia
             </Link>
             <div className="hidden md:flex space-x-4">
               {navItems.map((item) => {

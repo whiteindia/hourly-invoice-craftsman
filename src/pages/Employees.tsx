@@ -31,7 +31,7 @@ const Employees = () => {
     name: '',
     email: '',
     contact_number: '',
-    role: 'employee'
+    role: 'associate'
   });
 
   const { data: employees = [], isLoading } = useQuery({
@@ -60,7 +60,7 @@ const Employees = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['employees'] });
-      setNewEmployee({ name: '', email: '', contact_number: '', role: 'employee' });
+      setNewEmployee({ name: '', email: '', contact_number: '', role: 'associate' });
       setIsDialogOpen(false);
       toast.success('Employee created successfully!');
     },
@@ -140,7 +140,7 @@ const Employees = () => {
   };
 
   const resetForm = () => {
-    setNewEmployee({ name: '', email: '', contact_number: '', role: 'employee' });
+    setNewEmployee({ name: '', email: '', contact_number: '', role: 'associate' });
     setEditingEmployee(null);
   };
 
@@ -218,8 +218,10 @@ const Employees = () => {
                       <SelectValue placeholder="Select role" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="employee">Employee</SelectItem>
+                      <SelectItem value="associate">Associate</SelectItem>
+                      <SelectItem value="teamlead">Team Lead</SelectItem>
                       <SelectItem value="manager">Manager</SelectItem>
+                      <SelectItem value="accountant">Accountant</SelectItem>
                       <SelectItem value="admin">Admin</SelectItem>
                     </SelectContent>
                   </Select>

@@ -15,6 +15,7 @@ import Invoices from "./pages/Invoices";
 import Payments from "./pages/Payments";
 import Services from "./pages/Services";
 import Employees from "./pages/Employees";
+import Wages from "./pages/Wages";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -66,6 +67,11 @@ const App = () => (
             <Route path="/services" element={
               <ProtectedRoute>
                 <Services />
+              </ProtectedRoute>
+            } />
+            <Route path="/wages" element={
+              <ProtectedRoute>
+                <Wages />
               </ProtectedRoute>
             } />
             <Route path="*" element={<NotFound />} />
