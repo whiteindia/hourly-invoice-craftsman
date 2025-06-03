@@ -110,7 +110,10 @@ const Index = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('activity_feed')
-        .select('*')
+        .select(`
+          *,
+          profiles!activity_feed_user_id_fkey(full_name)
+        `)
         .order('created_at', { ascending: false })
         .limit(10);
       
@@ -164,6 +167,29 @@ const Index = () => {
     if (diffMins < 60) return `${diffMins}m ago`;
     if (diffHours < 24) return `${diffHours}h ago`;
     return `${diffDays}d ago`;
+  };
+
+  const getActivityIcon = (actionType: string) => {
+    switch (actionType) {
+      case 'created':
+        return '✨';
+      case 'updated':
+        return '📝';
+      case 'completed':
+        return '✅';
+      case 'logged_time':
+        return '⏱️';
+      case 'logged_in':
+        return '🔑';
+      case 'status_changed_to_in_progress':
+        return '🚀';
+      case 'status_changed_to_completed':
+        return '🎉';
+      case 'status_changed_to_not_started':
+        return '📋';
+      default:
+        return '📌';
+    }
   };
 
   return (
@@ -354,7 +380,13 @@ const Index = () => {
                     <div key={activity.id} className="p-3 border rounded-lg bg-gray-50">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
-                          <p className="text-sm font-medium text-gray-900">
+                          <div className="flex items-center space-x-2 mb-1">
+                            <span className="text-lg">{getActivityIcon(activity.action_type)}</span>
+                            <p className="text-sm font-medium text-gray-900">
+                              {activity.profiles?.full_name || 'Unknown User'}
+                            </p>
+                          </div>
+                          <p className="text-sm text-gray-700">
                             {activity.description}
                           </p>
                           <p className="text-xs text-gray-600 mt-1">

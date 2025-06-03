@@ -1,8 +1,7 @@
-
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
-import type { Database } from '@/integrations/supabase/types';
+import { logUserLogin } from '@/utils/activityLogger';
 
 type AppRole = Database['public']['Enums']['app_role'];
 
@@ -26,11 +25,11 @@ export const useAuth = () => {
   return context;
 };
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
-  const [userRole, setUserRole] = useState<AppRole | null>(null);
   const [loading, setLoading] = useState(true);
+  const [userRole, setUserRole] = useState<string | null>(null);
 
   const fetchUserRole = async (userId: string) => {
     try {
@@ -65,52 +64,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
-    // Set up auth state listener
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        fetchUserRole(session.user.id);
+        // Log user login activity
+        logUserLogin(session.user.email || 'Unknown user');
+      }
+      setLoading(false);
+    });
+
+    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        console.log('Auth state changed:', event, session?.user?.email);
+      async (event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
         
         if (session?.user) {
-          // Fetch user role when user is authenticated - use setTimeout to avoid callback issues
-          setTimeout(async () => {
-            try {
-              const role = await fetchUserRole(session.user.id);
-              setUserRole(role);
-            } catch (error) {
-              console.error('Error in fetchUserRole:', error);
-              setUserRole(null);
-            } finally {
-              setLoading(false);
-            }
-          }, 0);
+          fetchUserRole(session.user.id);
+          // Log user login activity for sign in events
+          if (event === 'SIGNED_IN') {
+            setTimeout(() => {
+              logUserLogin(session.user.email || 'Unknown user');
+            }, 0);
+          }
         } else {
           setUserRole(null);
-          setLoading(false);
         }
-      }
-    );
-
-    // Check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log('Initial session check:', session?.user?.email);
-      setSession(session);
-      setUser(session?.user ?? null);
-      
-      if (session?.user) {
-        fetchUserRole(session.user.id).then(role => {
-          setUserRole(role);
-          setLoading(false);
-        }).catch(error => {
-          console.error('Error in initial fetchUserRole:', error);
-          setUserRole(null);
-          setLoading(false);
-        });
-      } else {
+        
         setLoading(false);
       }
-    });
+    );
 
     return () => subscription.unsubscribe();
   }, []);

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,6 +8,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
+import { logTimeEntry } from '@/utils/activityLogger';
 
 interface Task {
   id: string;
@@ -140,11 +140,19 @@ const TimeTrackerWithComment: React.FC<TimeTrackerWithCommentProps> = ({ task, o
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSuccess: async (data) => {
       setActiveTimer(null);
       setElapsedTime(0);
       setComment('');
       setShowCommentDialog(false);
+      
+      // Log activity for time entry
+      const hours = Math.floor((data.duration_minutes || 0) / 60);
+      const minutes = (data.duration_minutes || 0) % 60;
+      const durationText = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+      
+      await logTimeEntry(task.name, task.id, durationText, data.comment || undefined);
+      
       toast.success('Timer stopped!');
       onSuccess();
     },

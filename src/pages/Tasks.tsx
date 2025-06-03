@@ -15,6 +15,7 @@ import Navigation from '@/components/Navigation';
 import TaskHistory from '@/components/TaskHistory';
 import TimeTrackerWithComment from '@/components/TimeTrackerWithComment';
 import { useAuth } from '@/contexts/AuthContext';
+import { logTaskUpdate } from '@/utils/activityLogger';
 
 interface Task {
   id: string;
@@ -281,8 +282,10 @@ const Tasks = () => {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSuccess: async (data) => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      // Log activity
+      await logTaskUpdate(data.name, data.id, 'created');
       setNewTask({
         name: '',
         project_id: '',
@@ -311,8 +314,10 @@ const Tasks = () => {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSuccess: async (data) => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      // Log activity
+      await logTaskUpdate(data.name, data.id, 'updated');
       setIsEditDialogOpen(false);
       setEditingTask(null);
       toast.success('Task updated successfully!');
@@ -334,8 +339,10 @@ const Tasks = () => {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSuccess: async (data) => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      // Log activity
+      await logTaskUpdate(data.name, data.id, `status_changed_to_${data.status.toLowerCase().replace(' ', '_')}`);
       toast.success('Task status updated!');
     },
     onError: (error) => {
