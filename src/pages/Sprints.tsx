@@ -173,14 +173,14 @@ const Sprints = () => {
     }
   });
 
-  const handleTaskStatusChange = (taskId: string, newStatus: string, sprintId: string) => {
+  const handleTaskStatusChange = (taskId: string, newStatus: 'Not Started' | 'In Progress' | 'Completed', sprintId: string) => {
     updateTaskStatus.mutate({ taskId, status: newStatus });
     
     // Update sprint status based on task statuses
     const sprint = sprints.find(s => s.id === sprintId);
     if (sprint) {
       const updatedTasks = sprint.tasks.map(t => 
-        t.id === taskId ? { ...t, status: newStatus as 'Not Started' | 'In Progress' | 'Completed' } : t
+        t.id === taskId ? { ...t, status: newStatus } : t
       );
       
       let sprintStatus: 'Not Started' | 'In Progress' | 'Completed' = 'Not Started';
