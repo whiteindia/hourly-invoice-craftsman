@@ -119,28 +119,34 @@ export const useProjectOperations = () => {
       console.log('Starting project deletion for ID:', id);
       
       // Get project details for logging before deletion
-      const { data: projectData } = await supabase
+      const { data: projectData, error: projectFetchError } = await supabase
         .from('projects')
         .select('name, clients(name)')
         .eq('id', id)
         .single();
       
+      if (projectFetchError) {
+        console.error('Error fetching project data:', projectFetchError);
+        throw projectFetchError;
+      }
+      
       // Step 1: Delete time entries associated with tasks of this project
       console.log('Step 1: Deleting time entries...');
-      const { error: timeEntriesError } = await supabase
-        .from('time_entries')
-        .delete()
-        .in('task_id', 
-          await supabase
-            .from('tasks')
-            .select('id')
-            .eq('project_id', id)
-            .then(({ data }) => data?.map(task => task.id) || [])
-        );
-      
-      if (timeEntriesError) {
-        console.error('Error deleting time entries:', timeEntriesError);
-        throw timeEntriesError;
+      const { data: taskIds } = await supabase
+        .from('tasks')
+        .select('id')
+        .eq('project_id', id);
+
+      if (taskIds && taskIds.length > 0) {
+        const { error: timeEntriesError } = await supabase
+          .from('time_entries')
+          .delete()
+          .in('task_id', taskIds.map(task => task.id));
+        
+        if (timeEntriesError) {
+          console.error('Error deleting time entries:', timeEntriesError);
+          throw timeEntriesError;
+        }
       }
 
       // Step 2: Delete tasks

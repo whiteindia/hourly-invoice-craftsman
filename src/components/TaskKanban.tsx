@@ -20,16 +20,18 @@ interface Task {
   id: string;
   created_at: string;
   name: string;
-  description: string | null;
+  description?: string | null;
   project_id: string | null;
   assigner_id: string | null;
   assignee_id: string | null;
-  status: string;
-  priority: string | null;
-  due_date: string | null;
-  estimated_hours: number | null;
-  actual_hours: number | null;
-  comments: string | null;
+  status: 'Not Started' | 'In Progress' | 'Completed';
+  priority?: string | null;
+  due_date?: string | null;
+  estimated_hours?: number | null;
+  actual_hours?: number | null;
+  comments?: string | null;
+  deadline?: string | null;
+  hours?: number;
   projects?: {
     name: string;
     clients: {
@@ -40,6 +42,9 @@ interface Task {
     name: string;
   };
   assigner?: {
+    name: string;
+  };
+  employees?: {
     name: string;
   };
 }
@@ -55,12 +60,14 @@ interface Employee {
 }
 
 interface TaskKanbanProps {
-  selectedProject: string | null;
-  selectedEmployee: string | null;
-  statusFilter: string | null;
+  tasks?: Task[];
+  onTaskStatusChange?: (taskId: string, newStatus: string) => void;
+  selectedProject?: string | null;
+  selectedEmployee?: string | null;
+  statusFilter?: string | null;
 }
 
-const TaskKanban = ({ selectedProject, selectedEmployee, statusFilter }: TaskKanbanProps) => {
+const TaskKanban = ({ tasks: externalTasks, onTaskStatusChange: externalOnTaskStatusChange, selectedProject, selectedEmployee, statusFilter }: TaskKanbanProps) => {
   const { user, userRole } = useAuth();
   const queryClient = useQueryClient();
   
@@ -83,7 +90,7 @@ const TaskKanban = ({ selectedProject, selectedEmployee, statusFilter }: TaskKan
   const taskStatuses = ['Not Started', 'In Progress', 'Completed', 'On Hold', 'Cancelled'];
   const taskPriorities = ['High', 'Medium', 'Low'];
 
-  const { data: tasks, isLoading: isTasksLoading } = useQuery({
+  const { data: fetchedTasks, isLoading: isTasksLoading } = useQuery({
     queryKey: ['tasks', selectedProject, selectedEmployee, statusFilter],
     queryFn: async () => {
       let query = supabase
@@ -110,9 +117,35 @@ const TaskKanban = ({ selectedProject, selectedEmployee, statusFilter }: TaskKan
 
       const { data, error } = await query;
       if (error) throw error;
-      return data as Task[];
-    }
+      
+      // Transform the data to match our Task interface
+      return (data || []).map(task => ({
+        id: task.id,
+        created_at: task.created_at,
+        name: task.name,
+        description: task.description || null,
+        project_id: task.project_id,
+        assigner_id: task.assigner_id,
+        assignee_id: task.assignee_id,
+        status: task.status as 'Not Started' | 'In Progress' | 'Completed',
+        priority: task.priority || null,
+        due_date: task.due_date || null,
+        estimated_hours: task.estimated_hours || null,
+        actual_hours: task.actual_hours || null,
+        comments: task.comments || null,
+        deadline: task.deadline || null,
+        hours: task.hours || 0,
+        projects: task.projects,
+        assignee: task.assignee,
+        assigner: task.assigner,
+        employees: task.assignee
+      })) as Task[];
+    },
+    enabled: !externalTasks // Only fetch if no external tasks provided
   });
+
+  // Use external tasks if provided, otherwise use fetched tasks
+  const tasks = externalTasks || fetchedTasks || [];
 
   const { data: projects, isLoading: isProjectsLoading } = useQuery({
     queryKey: ['projects'],
@@ -243,10 +276,15 @@ const TaskKanban = ({ selectedProject, selectedEmployee, statusFilter }: TaskKan
 
     const oldStatus = task.status;
     
-    updateTaskMutation.mutate({ 
-      id: taskId, 
-      updates: { status: newStatus } 
-    });
+    // Use external handler if provided, otherwise use internal mutation
+    if (externalOnTaskStatusChange) {
+      externalOnTaskStatusChange(taskId, newStatus);
+    } else {
+      updateTaskMutation.mutate({ 
+        id: taskId, 
+        updates: { status: newStatus } 
+      });
+    }
 
     // Log status change activity
     await logTaskStatusChanged(
@@ -342,7 +380,7 @@ const TaskKanban = ({ selectedProject, selectedEmployee, statusFilter }: TaskKan
     updateTaskStatus(taskId, newStatus);
   };
 
-  if (isTasksLoading || isProjectsLoading || isEmployeesLoading) {
+  if ((!externalTasks && (isTasksLoading || isProjectsLoading || isEmployeesLoading))) {
     return <div>Loading tasks...</div>;
   }
 
@@ -387,23 +425,23 @@ const TaskKanban = ({ selectedProject, selectedEmployee, statusFilter }: TaskKan
                     <p className="text-xs mt-1">{task.description}</p>
                     <div className="flex items-center space-x-2 mt-2">
                       <Avatar className="h-5 w-5">
-                        <AvatarImage src={`https://avatar.vercel.sh/${task.assignee?.name}.png`} />
-                        <AvatarFallback>{task.assignee?.name?.substring(0, 2)}</AvatarFallback>
+                        <AvatarImage src={`https://avatar.vercel.sh/${task.assignee?.name || task.employees?.name}.png`} />
+                        <AvatarFallback>{(task.assignee?.name || task.employees?.name)?.substring(0, 2)}</AvatarFallback>
                       </Avatar>
-                      <span className="text-gray-500 text-xs">{task.assignee?.name}</span>
+                      <span className="text-gray-500 text-xs">{task.assignee?.name || task.employees?.name}</span>
                     </div>
                     <div className="flex items-center space-x-3 mt-3">
                       <Badge variant="secondary">{task.priority}</Badge>
-                      {task.due_date && (
+                      {(task.due_date || task.deadline) && (
                         <div className="flex items-center space-x-1 text-gray-500">
                           <CalendarIcon className="h-3 w-3" />
-                          <span className="text-xs">{format(new Date(task.due_date), 'MMM dd, yyyy')}</span>
+                          <span className="text-xs">{format(new Date(task.due_date || task.deadline!), 'MMM dd, yyyy')}</span>
                         </div>
                       )}
                     </div>
                   </div>
                 ))}
-              {userRole === 'admin' && (
+              {userRole === 'admin' && !externalTasks && (
                 <Button variant="outline" className="w-full justify-center" onClick={() => setIsTaskDialogOpen(true)}>
                   <Plus className="h-4 w-4 mr-2" />
                   Add Task
@@ -414,184 +452,186 @@ const TaskKanban = ({ selectedProject, selectedEmployee, statusFilter }: TaskKan
         </div>
       ))}
 
-      <Dialog open={isTaskDialogOpen} onOpenChange={setIsTaskDialogOpen}>
-        <DialogTrigger asChild>
-          <div></div>
-        </DialogTrigger>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{editingTask ? 'Edit Task' : 'Create Task'}</DialogTitle>
-            <DialogDescription>
-              {editingTask ? 'Update task details' : 'Enter details for the new task'}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="name" className="text-right">
-                Name
-              </Label>
-              <Input
-                type="text"
-                id="name"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="col-span-3"
-              />
+      {!externalTasks && (
+        <Dialog open={isTaskDialogOpen} onOpenChange={setIsTaskDialogOpen}>
+          <DialogTrigger asChild>
+            <div></div>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{editingTask ? 'Edit Task' : 'Create Task'}</DialogTitle>
+              <DialogDescription>
+                {editingTask ? 'Update task details' : 'Enter details for the new task'}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="name" className="text-right">
+                  Name
+                </Label>
+                <Input
+                  type="text"
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="description" className="text-right">
+                  Description
+                </Label>
+                <Textarea
+                  id="description"
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="project_id" className="text-right">
+                  Project
+                </Label>
+                <Select onValueChange={(value) => setFormData({ ...formData, project_id: value })}>
+                  <SelectTrigger className="col-span-3">
+                    <SelectValue placeholder="Select project" defaultValue={formData.project_id} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {projects?.map((project) => (
+                      <SelectItem key={project.id} value={project.id}>
+                        {project.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="assigner_id" className="text-right">
+                  Assigner
+                </Label>
+                <Select onValueChange={(value) => setFormData({ ...formData, assigner_id: value })}>
+                  <SelectTrigger className="col-span-3">
+                    <SelectValue placeholder="Select assigner" defaultValue={formData.assigner_id} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {employees?.map((employee) => (
+                      <SelectItem key={employee.id} value={employee.id}>
+                        {employee.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="assignee_id" className="text-right">
+                  Assignee
+                </Label>
+                <Select onValueChange={(value) => setFormData({ ...formData, assignee_id: value })}>
+                  <SelectTrigger className="col-span-3">
+                    <SelectValue placeholder="Select assignee" defaultValue={formData.assignee_id} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {employees?.map((employee) => (
+                      <SelectItem key={employee.id} value={employee.id}>
+                        {employee.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="status" className="text-right">
+                  Status
+                </Label>
+                <Select onValueChange={(value) => setFormData({ ...formData, status: value })}>
+                  <SelectTrigger className="col-span-3">
+                    <SelectValue placeholder="Select status" defaultValue={formData.status} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {taskStatuses.map((status) => (
+                      <SelectItem key={status} value={status}>
+                        {status}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="priority" className="text-right">
+                  Priority
+                </Label>
+                <Select onValueChange={(value) => setFormData({ ...formData, priority: value })}>
+                  <SelectTrigger className="col-span-3">
+                    <SelectValue placeholder="Select priority" defaultValue={formData.priority} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {taskPriorities.map((priority) => (
+                      <SelectItem key={priority} value={priority}>
+                        {priority}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="due_date" className="text-right">
+                  Due Date
+                </Label>
+                <Input
+                  type="date"
+                  id="due_date"
+                  value={formData.due_date}
+                  onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="estimated_hours" className="text-right">
+                  Estimated Hours
+                </Label>
+                <Input
+                  type="number"
+                  id="estimated_hours"
+                  value={formData.estimated_hours}
+                  onChange={(e) => setFormData({ ...formData, estimated_hours: e.target.value })}
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="actual_hours" className="text-right">
+                  Actual Hours
+                </Label>
+                <Input
+                  type="number"
+                  id="actual_hours"
+                  value={formData.actual_hours}
+                  onChange={(e) => setFormData({ ...formData, actual_hours: e.target.value })}
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="comments" className="text-right">
+                  Comments
+                </Label>
+                <Textarea
+                  id="comments"
+                  value={formData.comments}
+                  onChange={(e) => setFormData({ ...formData, comments: e.target.value })}
+                  className="col-span-3"
+                />
+              </div>
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="description" className="text-right">
-                Description
-              </Label>
-              <Textarea
-                id="description"
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                className="col-span-3"
-              />
+            <div className="flex justify-end">
+              <Button variant="ghost" onClick={resetForm}>
+                Cancel
+              </Button>
+              <Button onClick={handleSubmit} disabled={createTaskMutation.isPending || updateTaskMutation.isPending}>
+                {editingTask ? 'Update' : 'Create'}
+              </Button>
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="project_id" className="text-right">
-                Project
-              </Label>
-              <Select onValueChange={(value) => setFormData({ ...formData, project_id: value })}>
-                <SelectTrigger className="col-span-3">
-                  <SelectValue placeholder="Select project" defaultValue={formData.project_id} />
-                </SelectTrigger>
-                <SelectContent>
-                  {projects?.map((project) => (
-                    <SelectItem key={project.id} value={project.id}>
-                      {project.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="assigner_id" className="text-right">
-                Assigner
-              </Label>
-              <Select onValueChange={(value) => setFormData({ ...formData, assigner_id: value })}>
-                <SelectTrigger className="col-span-3">
-                  <SelectValue placeholder="Select assigner" defaultValue={formData.assigner_id} />
-                </SelectTrigger>
-                <SelectContent>
-                  {employees?.map((employee) => (
-                    <SelectItem key={employee.id} value={employee.id}>
-                      {employee.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="assignee_id" className="text-right">
-                Assignee
-              </Label>
-              <Select onValueChange={(value) => setFormData({ ...formData, assignee_id: value })}>
-                <SelectTrigger className="col-span-3">
-                  <SelectValue placeholder="Select assignee" defaultValue={formData.assignee_id} />
-                </SelectTrigger>
-                <SelectContent>
-                  {employees?.map((employee) => (
-                    <SelectItem key={employee.id} value={employee.id}>
-                      {employee.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="status" className="text-right">
-                Status
-              </Label>
-              <Select onValueChange={(value) => setFormData({ ...formData, status: value })}>
-                <SelectTrigger className="col-span-3">
-                  <SelectValue placeholder="Select status" defaultValue={formData.status} />
-                </SelectTrigger>
-                <SelectContent>
-                  {taskStatuses.map((status) => (
-                    <SelectItem key={status} value={status}>
-                      {status}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="priority" className="text-right">
-                Priority
-              </Label>
-              <Select onValueChange={(value) => setFormData({ ...formData, priority: value })}>
-                <SelectTrigger className="col-span-3">
-                  <SelectValue placeholder="Select priority" defaultValue={formData.priority} />
-                </SelectTrigger>
-                <SelectContent>
-                  {taskPriorities.map((priority) => (
-                    <SelectItem key={priority} value={priority}>
-                      {priority}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="due_date" className="text-right">
-                Due Date
-              </Label>
-              <Input
-                type="date"
-                id="due_date"
-                value={formData.due_date}
-                onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
-                className="col-span-3"
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="estimated_hours" className="text-right">
-                Estimated Hours
-              </Label>
-              <Input
-                type="number"
-                id="estimated_hours"
-                value={formData.estimated_hours}
-                onChange={(e) => setFormData({ ...formData, estimated_hours: e.target.value })}
-                className="col-span-3"
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="actual_hours" className="text-right">
-                Actual Hours
-              </Label>
-              <Input
-                type="number"
-                id="actual_hours"
-                value={formData.actual_hours}
-                onChange={(e) => setFormData({ ...formData, actual_hours: e.target.value })}
-                className="col-span-3"
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="comments" className="text-right">
-                Comments
-              </Label>
-              <Textarea
-                id="comments"
-                value={formData.comments}
-                onChange={(e) => setFormData({ ...formData, comments: e.target.value })}
-                className="col-span-3"
-              />
-            </div>
-          </div>
-          <div className="flex justify-end">
-            <Button variant="ghost" onClick={resetForm}>
-              Cancel
-            </Button>
-            <Button onClick={handleSubmit} disabled={createTaskMutation.isPending || updateTaskMutation.isPending}>
-              {editingTask ? 'Update' : 'Create'}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 };

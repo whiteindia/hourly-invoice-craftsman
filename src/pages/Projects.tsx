@@ -4,10 +4,12 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { Database } from '@/integrations/supabase/types';
 import Navigation from '@/components/Navigation';
+import { Button } from '@/components/ui/button';
 import ProjectForm from '@/components/projects/ProjectForm';
 import ProjectFilters from '@/components/projects/ProjectFilters';
 import ProjectTable from '@/components/projects/ProjectTable';
 import { useProjectOperations } from '@/hooks/useProjectOperations';
+import { Plus } from 'lucide-react';
 
 type ProjectType = Database['public']['Enums']['project_type'];
 
@@ -241,26 +243,10 @@ const Projects = () => {
             <p className="text-gray-600 mt-2">Manage your client projects</p>
           </div>
           
-          <ProjectForm
-            clients={clients}
-            services={services}
-            newProject={newProject}
-            setNewProject={setNewProject}
-            editingProject={editingProject}
-            setEditingProject={setEditingProject}
-            editBillingType={editBillingType}
-            setEditBillingType={setEditBillingType}
-            editBrdFile={editBrdFile}
-            setEditBrdFile={setEditBrdFile}
-            isDialogOpen={isDialogOpen}
-            setIsDialogOpen={setIsDialogOpen}
-            isEditDialogOpen={isEditDialogOpen}
-            setIsEditDialogOpen={setIsEditDialogOpen}
-            uploadingBRD={uploadingBRD}
-            onCreateProject={handleCreateProject}
-            onUpdateProject={handleUpdateProject}
-            onViewBRD={openBRDFile}
-          />
+          <Button onClick={() => setIsDialogOpen(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Project
+          </Button>
         </div>
 
         <ProjectFilters
@@ -287,6 +273,27 @@ const Projects = () => {
           totalProjects={projects.length}
           onEdit={handleEditProject}
           onDelete={handleDeleteProject}
+          onViewBRD={openBRDFile}
+        />
+
+        <ProjectForm
+          clients={clients}
+          services={services}
+          newProject={newProject}
+          setNewProject={setNewProject}
+          editingProject={editingProject}
+          setEditingProject={setEditingProject}
+          editBillingType={editBillingType}
+          setEditBillingType={setEditBillingType}
+          editBrdFile={editBrdFile}
+          setEditBrdFile={setEditBrdFile}
+          isDialogOpen={isDialogOpen}
+          setIsDialogOpen={setIsDialogOpen}
+          isEditDialogOpen={isEditDialogOpen}
+          setIsEditDialogOpen={setIsEditDialogOpen}
+          uploadingBRD={uploadingBRD}
+          onCreateProject={handleCreateProject}
+          onUpdateProject={handleUpdateProject}
           onViewBRD={openBRDFile}
         />
       </div>
