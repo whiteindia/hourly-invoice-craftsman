@@ -1,3 +1,4 @@
+
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -124,85 +125,50 @@ export const useProjectOperations = () => {
         .eq('id', id)
         .single();
       
-      // Step 1: Get all tasks for this project
-      const { data: projectTasks, error: tasksError } = await supabase
+      // Step 1: Delete time entries associated with tasks of this project
+      console.log('Step 1: Deleting time entries...');
+      const { error: timeEntriesError } = await supabase
+        .from('time_entries')
+        .delete()
+        .in('task_id', 
+          await supabase
+            .from('tasks')
+            .select('id')
+            .eq('project_id', id)
+            .then(({ data }) => data?.map(task => task.id) || [])
+        );
+      
+      if (timeEntriesError) {
+        console.error('Error deleting time entries:', timeEntriesError);
+        throw timeEntriesError;
+      }
+
+      // Step 2: Delete tasks
+      console.log('Step 2: Deleting tasks...');
+      const { error: tasksError } = await supabase
         .from('tasks')
-        .select('id')
+        .delete()
         .eq('project_id', id);
       
       if (tasksError) {
-        console.error('Error fetching tasks:', tasksError);
+        console.error('Error deleting tasks:', tasksError);
         throw tasksError;
       }
+
+      // Step 3: Delete sprints
+      console.log('Step 3: Deleting sprints...');
+      const { error: sprintsError } = await supabase
+        .from('sprints')
+        .delete()
+        .eq('project_id', id);
       
-      console.log('Found tasks:', projectTasks?.length || 0);
-      
-      if (projectTasks && projectTasks.length > 0) {
-        const taskIds = projectTasks.map(task => task.id);
-        console.log('Task IDs to process:', taskIds);
-        
-        // Step 2: Delete all time entries for these tasks first
-        const { error: timeEntriesError } = await supabase
-          .from('time_entries')
-          .delete()
-          .in('task_id', taskIds);
-        
-        if (timeEntriesError) {
-          console.error('Error deleting time entries:', timeEntriesError);
-          throw timeEntriesError;
-        }
-        console.log('Deleted time entries for tasks');
-        
-        // Step 3: Delete all task comments for these tasks
-        const { error: commentsError } = await supabase
-          .from('task_comments')
-          .delete()
-          .in('task_id', taskIds);
-        
-        if (commentsError) {
-          console.error('Error deleting task comments:', commentsError);
-          throw commentsError;
-        }
-        console.log('Deleted task comments');
-        
-        // Step 4: Delete sprint_tasks associations
-        const { error: sprintTasksError } = await supabase
-          .from('sprint_tasks')
-          .delete()
-          .in('task_id', taskIds);
-        
-        if (sprintTasksError) {
-          console.error('Error deleting sprint tasks:', sprintTasksError);
-          throw sprintTasksError;
-        }
-        console.log('Deleted sprint task associations');
-        
-        // Step 5: Delete invoice_tasks associations
-        const { error: invoiceTasksError } = await supabase
-          .from('invoice_tasks')
-          .delete()
-          .in('task_id', taskIds);
-        
-        if (invoiceTasksError) {
-          console.error('Error deleting invoice tasks:', invoiceTasksError);
-          throw invoiceTasksError;
-        }
-        console.log('Deleted invoice task associations');
-        
-        // Step 6: Now delete the tasks themselves
-        const { error: deleteTasksError } = await supabase
-          .from('tasks')
-          .delete()
-          .eq('project_id', id);
-        
-        if (deleteTasksError) {
-          console.error('Error deleting tasks:', deleteTasksError);
-          throw deleteTasksError;
-        }
-        console.log('Deleted tasks');
+      if (sprintsError) {
+        console.error('Error deleting sprints:', sprintsError);
+        throw sprintsError;
       }
-      
-      // Step 7: Delete invoices for this project
+
+      // Step 4: Delete invoices
+      console.log('Step 4: Deleting invoices...');
       const { error: invoicesError } = await supabase
         .from('invoices')
         .delete()
@@ -212,45 +178,35 @@ export const useProjectOperations = () => {
         console.error('Error deleting invoices:', invoicesError);
         throw invoicesError;
       }
-      console.log('Deleted invoices');
-      
-      // Step 8: Delete payments for this project
-      const { error: paymentsError } = await supabase
-        .from('payments')
-        .delete()
-        .eq('project_id', id);
-      
-      if (paymentsError) {
-        console.error('Error deleting payments:', paymentsError);
-        throw paymentsError;
-      }
-      console.log('Deleted payments');
-      
-      // Step 9: Finally, delete the project itself
-      const { error } = await supabase
+
+      // Step 5: Finally delete the project
+      console.log('Step 5: Deleting project...');
+      const { error: projectError } = await supabase
         .from('projects')
         .delete()
         .eq('id', id);
       
-      if (error) {
-        console.error('Error deleting project:', error);
-        throw error;
+      if (projectError) {
+        console.error('Error deleting project:', projectError);
+        throw projectError;
       }
-      console.log('Project deleted successfully');
+
+      console.log('Project deletion completed successfully');
+      return { id, projectData };
     },
-    onSuccess: async ({ id, projectData }) => {
+    onSuccess: async (result) => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       toast.success('Project and all related data deleted successfully!');
       
       // Log activity
-      if (projectData) {
+      if (result && result.projectData) {
         await logActivity({
           action_type: 'deleted',
           entity_type: 'project',
-          entity_id: id,
-          entity_name: projectData.name,
-          description: `Deleted project: ${projectData.name} and all related data`,
-          comment: `Client: ${projectData.clients?.name || 'Unknown Client'}`
+          entity_id: result.id,
+          entity_name: result.projectData.name,
+          description: `Deleted project: ${result.projectData.name} and all related data`,
+          comment: `Client: ${result.projectData.clients?.name || 'Unknown Client'}`
         });
       }
     },
