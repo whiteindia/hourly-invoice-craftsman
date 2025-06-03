@@ -36,9 +36,12 @@ const RolesManagement = () => {
 
       if (error) throw error;
 
+      // Define the available roles properly typed
+      const availableRoles: AppRole[] = ['admin', 'manager', 'teamlead', 'associate', 'accountant'];
+      
       // Count privileges for each role
       const roleStats = await Promise.all(
-        ['admin', 'manager', 'teamlead', 'associate', 'accountant'].map(async (role) => {
+        availableRoles.map(async (role: AppRole) => {
           const { count, error } = await supabase
             .from('role_privileges')
             .select('*', { count: 'exact' })
@@ -48,7 +51,7 @@ const RolesManagement = () => {
           if (error) throw error;
 
           return {
-            role: role as AppRole,
+            role,
             privilegeCount: count || 0
           };
         })
