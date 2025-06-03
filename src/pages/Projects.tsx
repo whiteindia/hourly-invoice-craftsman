@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -255,9 +254,77 @@ const Projects = () => {
     }
   });
 
-  // Mutation to delete a project
+  // Mutation to delete a project with proper cascade handling
   const deleteProjectMutation = useMutation({
     mutationFn: async (id: string) => {
+      // First, get all tasks for this project
+      const { data: tasks, error: tasksError } = await supabase
+        .from('tasks')
+        .select('id')
+        .eq('project_id', id);
+      
+      if (tasksError) throw tasksError;
+      
+      // Delete time entries for all tasks in this project
+      if (tasks && tasks.length > 0) {
+        const taskIds = tasks.map(task => task.id);
+        const { error: timeEntriesError } = await supabase
+          .from('time_entries')
+          .delete()
+          .in('task_id', taskIds);
+        
+        if (timeEntriesError) throw timeEntriesError;
+        
+        // Delete task comments for all tasks in this project
+        const { error: commentsError } = await supabase
+          .from('task_comments')
+          .delete()
+          .in('task_id', taskIds);
+        
+        if (commentsError) throw commentsError;
+        
+        // Delete sprint_tasks associations
+        const { error: sprintTasksError } = await supabase
+          .from('sprint_tasks')
+          .delete()
+          .in('task_id', taskIds);
+        
+        if (sprintTasksError) throw sprintTasksError;
+        
+        // Delete invoice_tasks associations
+        const { error: invoiceTasksError } = await supabase
+          .from('invoice_tasks')
+          .delete()
+          .in('task_id', taskIds);
+        
+        if (invoiceTasksError) throw invoiceTasksError;
+        
+        // Delete tasks
+        const { error: deleteTasksError } = await supabase
+          .from('tasks')
+          .delete()
+          .eq('project_id', id);
+        
+        if (deleteTasksError) throw deleteTasksError;
+      }
+      
+      // Delete invoices for this project
+      const { error: invoicesError } = await supabase
+        .from('invoices')
+        .delete()
+        .eq('project_id', id);
+      
+      if (invoicesError) throw invoicesError;
+      
+      // Delete payments for this project
+      const { error: paymentsError } = await supabase
+        .from('payments')
+        .delete()
+        .eq('project_id', id);
+      
+      if (paymentsError) throw paymentsError;
+      
+      // Finally, delete the project
       const { error } = await supabase
         .from('projects')
         .delete()
@@ -267,7 +334,7 @@ const Projects = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
-      toast.success('Project deleted successfully!');
+      toast.success('Project and all related data deleted successfully!');
     },
     onError: (error) => {
       toast.error('Failed to delete project: ' + error.message);
