@@ -32,6 +32,9 @@ interface TaskData {
   projects: {
     name: string;
     hourly_rate: number;
+    clients: {
+      name: string;
+    };
   };
   employees: {
     name: string;
@@ -75,7 +78,7 @@ const Tasks = () => {
   const [assigneeFilter, setAssigneeFilter] = useState('all');
   const [globalServiceFilter, setGlobalServiceFilter] = useState<string>('all');
 
-  // Fetch tasks with project and employee data including employee services
+  // Fetch tasks with project and employee data including employee services and client data
   const { data: tasks = [], isLoading } = useQuery({
     queryKey: ['tasks'],
     queryFn: async () => {
@@ -83,7 +86,11 @@ const Tasks = () => {
         .from('tasks')
         .select(`
           *,
-          projects(name, hourly_rate),
+          projects(
+            name, 
+            hourly_rate,
+            clients(name)
+          ),
           employees!tasks_assignee_id_fkey(
             name,
             employee_services(service_id)
