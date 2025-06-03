@@ -22,6 +22,12 @@ interface ProjectData {
   };
 }
 
+interface DeleteProjectResult {
+  deletedProjectId: string;
+  projectName: string;
+  clientName: string;
+}
+
 export const useProjectOperations = () => {
   const queryClient = useQueryClient();
 
@@ -132,8 +138,8 @@ export const useProjectOperations = () => {
   });
 
   // Mutation to delete a project with proper cascade handling
-  const deleteProjectMutation = useMutation({
-    mutationFn: async (id: string) => {
+  const deleteProjectMutation = useMutation<DeleteProjectResult, Error, string>({
+    mutationFn: async (id: string): Promise<DeleteProjectResult> => {
       console.log('Starting project deletion for ID:', id);
       
       // Get project details for logging before deletion
@@ -217,7 +223,6 @@ export const useProjectOperations = () => {
 
       console.log('Project deletion completed successfully');
       
-      // Return simplified structure to avoid TypeScript issues
       return {
         deletedProjectId: id,
         projectName: projectData.name,
