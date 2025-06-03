@@ -50,7 +50,7 @@ const Projects = () => {
   const [newProject, setNewProject] = useState({
     name: '',
     client_id: '',
-    type: 'DevOps' as ProjectType,
+    type: '' as ProjectType,
     billing_type: 'hourly' as 'hourly' | 'project',
     hourly_rate: 0,
     project_amount: 0,
@@ -104,7 +104,7 @@ const Projects = () => {
     }
   });
 
-  // Fetch services for filtering
+  // Fetch services for project types and filtering
   const { data: services = [] } = useQuery({
     queryKey: ['services'],
     queryFn: async () => {
@@ -450,18 +450,17 @@ const Projects = () => {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="type">Project Type</Label>
+                  <Label htmlFor="type">Project Type (Service)</Label>
                   <Select value={newProject.type} onValueChange={(value) => setNewProject({ ...newProject, type: value as ProjectType })}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select project type" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="DevOps">DevOps</SelectItem>
-                      <SelectItem value="Marketing">Marketing</SelectItem>
-                      <SelectItem value="Consulting">Consulting</SelectItem>
-                      <SelectItem value="Strategy">Strategy</SelectItem>
-                      <SelectItem value="Technical Writing">Technical Writing</SelectItem>
-                      <SelectItem value="BRD">BRD</SelectItem>
+                      {services.map((service) => (
+                        <SelectItem key={service.id} value={service.name}>
+                          {service.name}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -612,12 +611,11 @@ const Projects = () => {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Types</SelectItem>
-                    <SelectItem value="DevOps">DevOps</SelectItem>
-                    <SelectItem value="Marketing">Marketing</SelectItem>
-                    <SelectItem value="Consulting">Consulting</SelectItem>
-                    <SelectItem value="Strategy">Strategy</SelectItem>
-                    <SelectItem value="Technical Writing">Technical Writing</SelectItem>
-                    <SelectItem value="BRD">BRD</SelectItem>
+                    {services.map((service) => (
+                      <SelectItem key={service.id} value={service.name}>
+                        {service.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -805,18 +803,17 @@ const Projects = () => {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="edit-type">Project Type</Label>
+                  <Label htmlFor="edit-type">Project Type (Service)</Label>
                   <Select value={editingProject.type} onValueChange={(value) => setEditingProject({ ...editingProject, type: value as ProjectType })}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select project type" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="DevOps">DevOps</SelectItem>
-                      <SelectItem value="Marketing">Marketing</SelectItem>
-                      <SelectItem value="Consulting">Consulting</SelectItem>
-                      <SelectItem value="Strategy">Strategy</SelectItem>
-                      <SelectItem value="Technical Writing">Technical Writing</SelectItem>
-                      <SelectItem value="BRD">BRD</SelectItem>
+                      {services.map((service) => (
+                        <SelectItem key={service.id} value={service.name}>
+                          {service.name}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
