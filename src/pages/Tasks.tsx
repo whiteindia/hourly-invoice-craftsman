@@ -54,12 +54,12 @@ interface TaskData {
     clients: {
       name: string;
     };
+    project_services?: {
+      service_id: string;
+    }[];
   };
   employees: {
     name: string;
-    employee_services?: {
-      service_id: string;
-    }[];
   };
   assigners?: {
     name: string;
@@ -101,7 +101,7 @@ const Tasks = () => {
   const [globalServiceFilter, setGlobalServiceFilter] = useState<string>('all');
   const [expandedHistories, setExpandedHistories] = useState<Set<string>>(new Set());
 
-  // Fetch tasks with project and employee data including employee services, client data, and assigner data
+  // Fetch tasks with project and employee data including project services, client data, and assigner data
   const { data: tasks = [], isLoading } = useQuery({
     queryKey: ['tasks'],
     queryFn: async () => {
@@ -112,12 +112,10 @@ const Tasks = () => {
           projects(
             name, 
             hourly_rate,
-            clients(name)
+            clients(name),
+            project_services(service_id)
           ),
-          employees!tasks_assignee_id_fkey(
-            name,
-            employee_services(service_id)
-          ),
+          employees!tasks_assignee_id_fkey(name),
           assigners:employees!tasks_assigner_id_fkey(name)
         `)
         .order('created_at', { ascending: false });
@@ -282,7 +280,7 @@ const Tasks = () => {
     }
   });
 
-  // Filter tasks based on all filters including global service filter and assigner filter
+  // Filter tasks based on all filters including global service filter from project services
   const filteredTasks = tasks.filter(task => {
     const matchesProject = selectedProject === 'all' || task.project_id === selectedProject;
     const matchesStatus = statusFilter === 'all' || task.status === statusFilter;
@@ -290,10 +288,10 @@ const Tasks = () => {
     const matchesAssigner = assignerFilter === 'all' || task.assigner_id === assignerFilter;
     const matchesSearch = task.name.toLowerCase().includes(searchTerm.toLowerCase());
     
-    // Properly implement service filter through employee services
+    // Filter by service through project services instead of employee services
     const matchesService = globalServiceFilter === 'all' || 
-      (task.employees?.employee_services && 
-       task.employees.employee_services.some(es => es.service_id === globalServiceFilter));
+      (task.projects?.project_services && 
+       task.projects.project_services.some(ps => ps.service_id === globalServiceFilter));
     
     return matchesProject && matchesStatus && matchesAssignee && matchesAssigner && matchesSearch && matchesService;
   });
