@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import Navigation from '@/components/Navigation';
+import EmployeeServicesSelect from '@/components/EmployeeServicesSelect';
 
 interface Employee {
   id: string;
@@ -23,10 +24,16 @@ interface Employee {
   updated_at: string;
 }
 
+interface EmployeeService {
+  service_id: string;
+  services: { name: string };
+}
+
 const Employees = () => {
   const queryClient = useQueryClient();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
+  const [selectedServices, setSelectedServices] = useState<string[]>([]);
   const [newEmployee, setNewEmployee] = useState({
     name: '',
     email: '',
@@ -47,6 +54,23 @@ const Employees = () => {
     }
   });
 
+  // Get employee services for display
+  const { data: employeeServices = [] } = useQuery({
+    queryKey: ['employee-services'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('employee_services')
+        .select(`
+          employee_id,
+          service_id,
+          services(name)
+        `);
+      
+      if (error) throw error;
+      return data as (EmployeeService & { employee_id: string })[];
+    }
+  });
+
   const addEmployeeMutation = useMutation({
     mutationFn: async (employeeData: typeof newEmployee) => {
       const { data, error } = await supabase
@@ -56,11 +80,28 @@ const Employees = () => {
         .single();
       
       if (error) throw error;
+      
+      // Add employee services
+      if (selectedServices.length > 0) {
+        const serviceInserts = selectedServices.map(serviceId => ({
+          employee_id: data.id,
+          service_id: serviceId
+        }));
+        
+        const { error: servicesError } = await supabase
+          .from('employee_services')
+          .insert(serviceInserts);
+        
+        if (servicesError) throw servicesError;
+      }
+      
       return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['employees'] });
+      queryClient.invalidateQueries({ queryKey: ['employee-services'] });
       setNewEmployee({ name: '', email: '', contact_number: '', role: 'associate' });
+      setSelectedServices([]);
       setIsDialogOpen(false);
       toast.success('Employee created successfully!');
     },
@@ -79,11 +120,35 @@ const Employees = () => {
         .single();
       
       if (error) throw error;
+      
+      // Update employee services
+      // First delete existing services
+      await supabase
+        .from('employee_services')
+        .delete()
+        .eq('employee_id', id);
+      
+      // Then add new services
+      if (selectedServices.length > 0) {
+        const serviceInserts = selectedServices.map(serviceId => ({
+          employee_id: id,
+          service_id: serviceId
+        }));
+        
+        const { error: servicesError } = await supabase
+          .from('employee_services')
+          .insert(serviceInserts);
+        
+        if (servicesError) throw servicesError;
+      }
+      
       return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['employees'] });
+      queryClient.invalidateQueries({ queryKey: ['employee-services'] });
       setEditingEmployee(null);
+      setSelectedServices([]);
       setIsDialogOpen(false);
       toast.success('Employee updated successfully!');
     },
@@ -103,6 +168,7 @@ const Employees = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['employees'] });
+      queryClient.invalidateQueries({ queryKey: ['employee-services'] });
       toast.success('Employee deleted successfully!');
     },
     onError: (error) => {
@@ -122,7 +188,7 @@ const Employees = () => {
     }
   };
 
-  const handleEdit = (employee: Employee) => {
+  const handleEdit = async (employee: Employee) => {
     setEditingEmployee(employee);
     setNewEmployee({
       name: employee.name,
@@ -130,6 +196,13 @@ const Employees = () => {
       contact_number: employee.contact_number || '',
       role: employee.role
     });
+    
+    // Load employee services
+    const empServices = employeeServices
+      .filter(es => es.employee_id === employee.id)
+      .map(es => es.service_id);
+    setSelectedServices(empServices);
+    
     setIsDialogOpen(true);
   };
 
@@ -141,7 +214,15 @@ const Employees = () => {
 
   const resetForm = () => {
     setNewEmployee({ name: '', email: '', contact_number: '', role: 'associate' });
+    setSelectedServices([]);
     setEditingEmployee(null);
+  };
+
+  const getEmployeeServices = (employeeId: string) => {
+    return employeeServices
+      .filter(es => es.employee_id === employeeId)
+      .map(es => es.services.name)
+      .join(', ') || 'None';
   };
 
   if (isLoading) {
@@ -162,7 +243,7 @@ const Employees = () => {
         <div className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Employees</h1>
-            <p className="text-gray-600 mt-2">Manage your team members and their roles</p>
+            <p className="text-gray-600 mt-2">Manage your team members, their roles, and services</p>
           </div>
           
           <Dialog open={isDialogOpen} onOpenChange={(open) => {
@@ -175,11 +256,11 @@ const Employees = () => {
                 Add Employee
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-w-md">
               <DialogHeader>
                 <DialogTitle>{editingEmployee ? 'Edit Employee' : 'Add New Employee'}</DialogTitle>
                 <DialogDescription>
-                  {editingEmployee ? 'Update employee information.' : 'Add a new team member to your organization.'}
+                  {editingEmployee ? 'Update employee information and services.' : 'Add a new team member with their services.'}
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
@@ -226,6 +307,10 @@ const Employees = () => {
                     </SelectContent>
                   </Select>
                 </div>
+                <EmployeeServicesSelect 
+                  selectedServices={selectedServices}
+                  onServicesChange={setSelectedServices}
+                />
                 <Button 
                   onClick={handleSubmit} 
                   className="w-full"
@@ -252,6 +337,7 @@ const Employees = () => {
                   <TableHead>Email</TableHead>
                   <TableHead>Contact</TableHead>
                   <TableHead>Role</TableHead>
+                  <TableHead>Services</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -263,6 +349,9 @@ const Employees = () => {
                     <TableCell>{employee.contact_number || 'N/A'}</TableCell>
                     <TableCell>
                       <span className="capitalize">{employee.role}</span>
+                    </TableCell>
+                    <TableCell className="max-w-48 truncate">
+                      {getEmployeeServices(employee.id)}
                     </TableCell>
                     <TableCell>
                       <div className="flex space-x-2">

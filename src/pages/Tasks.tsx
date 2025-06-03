@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -14,7 +13,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import Navigation from '@/components/Navigation';
 import TaskHistory from '@/components/TaskHistory';
-import TimeTracker from '@/components/TimeTracker';
+import TimeTrackerWithComment from '@/components/TimeTrackerWithComment';
 import { useAuth } from '@/contexts/AuthContext';
 
 interface Task {
@@ -512,7 +511,7 @@ const Tasks = () => {
                       </TableCell>
                       <TableCell>
                         <div className="flex space-x-2">
-                          <TimeTracker 
+                          <TimeTrackerWithComment 
                             task={task} 
                             onSuccess={() => handleTimeTrackerUpdate(task.id)} 
                           />
