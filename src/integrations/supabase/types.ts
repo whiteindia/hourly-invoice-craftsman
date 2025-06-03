@@ -295,6 +295,7 @@ export type Database = {
           hourly_rate: number
           id: string
           name: string
+          start_date: string | null
           status: Database["public"]["Enums"]["project_status"]
           total_hours: number
           type: Database["public"]["Enums"]["project_type"]
@@ -306,6 +307,7 @@ export type Database = {
           hourly_rate: number
           id?: string
           name: string
+          start_date?: string | null
           status?: Database["public"]["Enums"]["project_status"]
           total_hours?: number
           type: Database["public"]["Enums"]["project_type"]
@@ -317,6 +319,7 @@ export type Database = {
           hourly_rate?: number
           id?: string
           name?: string
+          start_date?: string | null
           status?: Database["public"]["Enums"]["project_status"]
           total_hours?: number
           type?: Database["public"]["Enums"]["project_type"]

@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -6,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { Plus, DollarSign, Clock, User, Upload, Filter } from 'lucide-react';
+import { Plus, DollarSign, Clock, User, Upload, Filter, Edit } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -46,7 +47,9 @@ const Projects = () => {
     start_date: '',
     brd_file: null as File | null
   });
+  const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [filters, setFilters] = useState({
     year: new Date().getFullYear().toString(),
     client_id: 'all-clients',
@@ -157,6 +160,43 @@ const Projects = () => {
     }
   });
 
+  // Update project mutation
+  const updateProjectMutation = useMutation({
+    mutationFn: async (projectData: {
+      id: string;
+      name: string;
+      type: ProjectType;
+      hourly_rate: number;
+      status: ProjectStatus;
+      start_date?: string;
+    }) => {
+      const { data, error } = await supabase
+        .from('projects')
+        .update({
+          name: projectData.name,
+          type: projectData.type,
+          hourly_rate: projectData.hourly_rate,
+          status: projectData.status,
+          start_date: projectData.start_date
+        })
+        .eq('id', projectData.id)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      setEditingProject(null);
+      setIsEditDialogOpen(false);
+      toast.success('Project updated successfully!');
+    },
+    onError: (error) => {
+      toast.error('Failed to update project: ' + error.message);
+    }
+  });
+
   const handleProjectTypeChange = (type: ProjectType) => {
     const projectType = projectTypes.find(pt => pt.value === type);
     setNewProject({
@@ -207,6 +247,24 @@ const Projects = () => {
       type: newProject.type as ProjectType,
       hourly_rate: newProject.basis === 'tasks' ? parseFloat(newProject.hourly_rate) : undefined,
       start_date: newProject.start_date
+    });
+  };
+
+  const handleEditProject = (project: Project) => {
+    setEditingProject(project);
+    setIsEditDialogOpen(true);
+  };
+
+  const handleUpdateProject = () => {
+    if (!editingProject) return;
+
+    updateProjectMutation.mutate({
+      id: editingProject.id,
+      name: editingProject.name,
+      type: editingProject.type,
+      hourly_rate: editingProject.hourly_rate,
+      status: editingProject.status,
+      start_date: editingProject.start_date
     });
   };
 
@@ -354,6 +412,85 @@ const Projects = () => {
           </Dialog>
         </div>
 
+        {/* Edit Project Dialog */}
+        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Edit Project</DialogTitle>
+              <DialogDescription>
+                Update project details and status.
+              </DialogDescription>
+            </DialogHeader>
+            {editingProject && (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="editProjectName">Project Name</Label>
+                  <Input
+                    id="editProjectName"
+                    value={editingProject.name}
+                    onChange={(e) => setEditingProject({...editingProject, name: e.target.value})}
+                    placeholder="Enter project name"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="editType">Project Type</Label>
+                  <Select value={editingProject.type} onValueChange={(value) => setEditingProject({...editingProject, type: value as ProjectType})}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select project type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {projectTypes.map((type) => (
+                        <SelectItem key={type.value} value={type.value}>
+                          {type.value}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="editHourlyRate">Hourly Rate (₹)</Label>
+                  <Input
+                    id="editHourlyRate"
+                    type="number"
+                    value={editingProject.hourly_rate}
+                    onChange={(e) => setEditingProject({...editingProject, hourly_rate: parseFloat(e.target.value) || 0})}
+                    placeholder="100"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="editStatus">Project Status</Label>
+                  <Select value={editingProject.status} onValueChange={(value) => setEditingProject({...editingProject, status: value as ProjectStatus})}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Active">Active</SelectItem>
+                      <SelectItem value="Completed">Completed</SelectItem>
+                      <SelectItem value="On Hold">On Hold</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="editStartDate">Start Date</Label>
+                  <Input
+                    id="editStartDate"
+                    type="date"
+                    value={editingProject.start_date || ''}
+                    onChange={(e) => setEditingProject({...editingProject, start_date: e.target.value})}
+                  />
+                </div>
+                <Button 
+                  onClick={handleUpdateProject} 
+                  className="w-full"
+                  disabled={updateProjectMutation.isPending}
+                >
+                  {updateProjectMutation.isPending ? 'Updating...' : 'Update Project'}
+                </Button>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+
         {/* Filters */}
         <Card className="mb-6">
           <CardHeader>
@@ -405,6 +542,7 @@ const Projects = () => {
                     <SelectItem value="all-statuses">All statuses</SelectItem>
                     <SelectItem value="Active">Active</SelectItem>
                     <SelectItem value="Completed">Completed</SelectItem>
+                    <SelectItem value="On Hold">On Hold</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -421,9 +559,19 @@ const Projects = () => {
               <CardHeader>
                 <div className="flex justify-between items-start mb-2">
                   <CardTitle className="text-lg leading-tight">{project.name}</CardTitle>
-                  <Badge className={getStatusColor(project.status)}>
-                    {project.status}
-                  </Badge>
+                  <div className="flex items-center space-x-2">
+                    <Badge className={getStatusColor(project.status)}>
+                      {project.status}
+                    </Badge>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleEditProject(project)}
+                      className="h-8 w-8 p-0"
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
                 <CardDescription className="flex items-center space-x-2">
                   <User className="h-4 w-4" />
