@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -54,9 +55,6 @@ interface TaskData {
     clients: {
       name: string;
     };
-    project_services?: {
-      service_id: string;
-    }[];
   };
   employees: {
     name: string;
@@ -69,6 +67,9 @@ interface TaskData {
 interface Project {
   id: string;
   name: string;
+  project_services?: {
+    service_id: string;
+  }[];
 }
 
 interface Employee {
@@ -101,7 +102,7 @@ const Tasks = () => {
   const [globalServiceFilter, setGlobalServiceFilter] = useState<string>('all');
   const [expandedHistories, setExpandedHistories] = useState<Set<string>>(new Set());
 
-  // Fetch tasks with project and employee data including project services, client data, and assigner data
+  // Fetch tasks with project and employee data including client data and assigner data
   const { data: tasks = [], isLoading } = useQuery({
     queryKey: ['tasks'],
     queryFn: async () => {
@@ -112,8 +113,7 @@ const Tasks = () => {
           projects(
             name, 
             hourly_rate,
-            clients(name),
-            project_services(service_id)
+            clients(name)
           ),
           employees!tasks_assignee_id_fkey(name),
           assigners:employees!tasks_assigner_id_fkey(name)
@@ -125,13 +125,17 @@ const Tasks = () => {
     }
   });
 
-  // Fetch projects for dropdown
+  // Fetch projects for dropdown - including project services
   const { data: projects = [] } = useQuery({
     queryKey: ['projects'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('projects')
-        .select('id, name')
+        .select(`
+          id, 
+          name,
+          project_services(service_id)
+        `)
         .order('name');
       
       if (error) throw error;
@@ -288,10 +292,9 @@ const Tasks = () => {
     const matchesAssigner = assignerFilter === 'all' || task.assigner_id === assignerFilter;
     const matchesSearch = task.name.toLowerCase().includes(searchTerm.toLowerCase());
     
-    // Filter by service through project services instead of employee services
+    // Filter by service through project services
     const matchesService = globalServiceFilter === 'all' || 
-      (task.projects?.project_services && 
-       task.projects.project_services.some(ps => ps.service_id === globalServiceFilter));
+      (projects.find(p => p.id === task.project_id)?.project_services?.some(ps => ps.service_id === globalServiceFilter));
     
     return matchesProject && matchesStatus && matchesAssignee && matchesAssigner && matchesSearch && matchesService;
   });
