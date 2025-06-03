@@ -6,14 +6,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { CalendarIcon, Download, Filter } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
+import { CalendarIcon, Download, Filter, Check, X } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import Navigation from '@/components/Navigation';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
 interface TimeEntry {
   id: string;
@@ -23,7 +25,9 @@ interface TimeEntry {
   created_at: string;
   start_time: string;
   tasks: {
+    id: string;
     name: string;
+    wage_status: string;
     projects: {
       name: string;
       hourly_rate: number;
@@ -33,6 +37,10 @@ interface TimeEntry {
     name: string;
     employee_services?: {
       service_id: string;
+      services: {
+        id: string;
+        name: string;
+      };
     }[];
   };
 }
@@ -51,10 +59,12 @@ const Wages = () => {
   const [selectedEmployee, setSelectedEmployee] = useState<string>('all');
   const [selectedMonth, setSelectedMonth] = useState<Date>(new Date());
   const [globalServiceFilter, setGlobalServiceFilter] = useState<string>('all');
+  const [wageStatusFilter, setWageStatusFilter] = useState<string>('all');
+  const queryClient = useQueryClient();
 
   // Fetch time entries with employee services data
   const { data: timeEntries = [], isLoading } = useQuery({
-    queryKey: ['time-entries', selectedEmployee, selectedMonth, globalServiceFilter],
+    queryKey: ['time-entries', selectedEmployee, selectedMonth],
     queryFn: async () => {
       const startDate = startOfMonth(selectedMonth).toISOString();
       const endDate = endOfMonth(selectedMonth).toISOString();
@@ -64,7 +74,9 @@ const Wages = () => {
         .select(`
           *,
           tasks(
+            id,
             name,
+            wage_status,
             projects(
               name,
               hourly_rate
@@ -72,7 +84,13 @@ const Wages = () => {
           ),
           employees(
             name,
-            employee_services(service_id)
+            employee_services(
+              service_id,
+              services(
+                id,
+                name
+              )
+            )
           )
         `)
         .gte('start_time', startDate)
@@ -130,6 +148,21 @@ const Wages = () => {
     }
   });
 
+  // Update wage status mutation
+  const updateWageStatusMutation = useMutation({
+    mutationFn: async ({ taskId, status }: { taskId: string; status: string }) => {
+      const { error } = await supabase
+        .from('tasks')
+        .update({ wage_status: status })
+        .eq('id', taskId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['time-entries'] });
+    }
+  });
+
   // Calculate wages from time entries
   const wageRecords = timeEntries.map(entry => ({
     id: entry.id,
@@ -140,25 +173,39 @@ const Wages = () => {
     wage_amount: entry.duration_minutes && entry.tasks?.projects?.hourly_rate ? 
       (entry.duration_minutes / 60) * entry.tasks.projects.hourly_rate : 0,
     date: entry.start_time,
+    wage_status: entry.tasks?.wage_status || 'wnotpaid',
     tasks: entry.tasks,
     employees: entry.employees
   }));
 
-  // Filter wage records based on filters including service filter
+  // Filter wage records based on all filters
   const filteredWageRecords = wageRecords.filter(record => {
     const matchesEmployee = selectedEmployee === 'all' || record.employee_id === selectedEmployee;
     
-    // Properly implement service filter through employee services
+    // Fix service filter - check if employee has the selected service
     const matchesService = globalServiceFilter === 'all' || 
       (record.employees?.employee_services && 
        record.employees.employee_services.some(es => es.service_id === globalServiceFilter));
     
-    return matchesEmployee && matchesService;
+    // Wage status filter
+    const matchesWageStatus = wageStatusFilter === 'all' || record.wage_status === wageStatusFilter;
+    
+    return matchesEmployee && matchesService && matchesWageStatus;
   });
 
-  // Calculate total hours and total wages
+  // Calculate totals
   const totalHours = filteredWageRecords.reduce((sum, record) => sum + record.hours_worked, 0);
   const totalWages = filteredWageRecords.reduce((sum, record) => sum + record.wage_amount, 0);
+  const paidWages = filteredWageRecords
+    .filter(record => record.wage_status === 'wpaid')
+    .reduce((sum, record) => sum + record.wage_amount, 0);
+  const unpaidWages = filteredWageRecords
+    .filter(record => record.wage_status === 'wnotpaid')
+    .reduce((sum, record) => sum + record.wage_amount, 0);
+
+  const handleWageStatusChange = (taskId: string, status: string) => {
+    updateWageStatusMutation.mutate({ taskId, status });
+  };
 
   return (
     <Navigation>
@@ -170,24 +217,6 @@ const Wages = () => {
           </div>
           
           <div className="flex items-center space-x-4">
-            {/* Global Service Filter */}
-            <div className="flex items-center space-x-2">
-              <Filter className="h-4 w-4 text-gray-500" />
-              <Select value={globalServiceFilter} onValueChange={setGlobalServiceFilter}>
-                <SelectTrigger className="w-48">
-                  <SelectValue placeholder="Filter by service" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Services</SelectItem>
-                  {services.map((service) => (
-                    <SelectItem key={service.id} value={service.id}>
-                      {service.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
             <Button variant="outline">
               <Download className="h-4 w-4 mr-2" />
               Export Report
@@ -198,7 +227,7 @@ const Wages = () => {
         {/* Filters */}
         <Card className="mb-6">
           <CardContent className="p-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <div className="space-y-2">
                 <Label>Employee</Label>
                 <Select value={selectedEmployee} onValueChange={setSelectedEmployee}>
@@ -242,11 +271,45 @@ const Wages = () => {
                 </Popover>
               </div>
             </div>
+
+            {/* Second row of filters */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Service Filter</Label>
+                <Select value={globalServiceFilter} onValueChange={setGlobalServiceFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Filter by service" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Services</SelectItem>
+                    {services.map((service) => (
+                      <SelectItem key={service.id} value={service.id}>
+                        {service.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Wage Status</Label>
+                <Select value={wageStatusFilter} onValueChange={setWageStatusFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Filter by wage status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Status</SelectItem>
+                    <SelectItem value="wpaid">Paid</SelectItem>
+                    <SelectItem value="wnotpaid">Not Paid</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
           <Card>
             <CardContent className="p-6">
               <CardTitle>Total Hours</CardTitle>
@@ -258,18 +321,24 @@ const Wages = () => {
           <Card>
             <CardContent className="p-6">
               <CardTitle>Total Wages</CardTitle>
-              <CardDescription>Total wages to be paid this month</CardDescription>
+              <CardDescription>Total wages for this month</CardDescription>
               <div className="text-2xl font-bold">₹{totalWages.toFixed(2)}</div>
             </CardContent>
           </Card>
 
           <Card>
             <CardContent className="p-6">
-              <CardTitle>Average Hourly Rate</CardTitle>
-              <CardDescription>Average hourly rate across all employees</CardDescription>
-              <div className="text-2xl font-bold">
-                ₹{(filteredWageRecords.length > 0 ? totalWages / totalHours : 0).toFixed(2)}/hour
-              </div>
+              <CardTitle>Paid Wages</CardTitle>
+              <CardDescription>Wages already paid</CardDescription>
+              <div className="text-2xl font-bold text-green-600">₹{paidWages.toFixed(2)}</div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-6">
+              <CardTitle>Unpaid Wages</CardTitle>
+              <CardDescription>Wages pending payment</CardDescription>
+              <div className="text-2xl font-bold text-red-600">₹{unpaidWages.toFixed(2)}</div>
             </CardContent>
           </Card>
         </div>
@@ -277,10 +346,11 @@ const Wages = () => {
         {/* Detailed Wage Records */}
         <Card>
           <CardHeader>
-            <CardTitle>Detailed Time Entries</CardTitle>
+            <CardTitle>Wage Records</CardTitle>
             <CardDescription>
-              Employee time entries and wage calculations for {format(selectedMonth, "MMMM yyyy")}
+              Employee wage records for {format(selectedMonth, "MMMM yyyy")}
               {globalServiceFilter !== 'all' && ` filtered by ${services.find(s => s.id === globalServiceFilter)?.name}`}
+              {wageStatusFilter !== 'all' && ` - ${wageStatusFilter === 'wpaid' ? 'Paid' : 'Not Paid'} wages`}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -291,9 +361,11 @@ const Wages = () => {
                   <TableHead>Task</TableHead>
                   <TableHead>Project</TableHead>
                   <TableHead>Date</TableHead>
-                  <TableHead>Hours Worked</TableHead>
-                  <TableHead>Hourly Rate</TableHead>
-                  <TableHead>Wage Amount</TableHead>
+                  <TableHead>Hours</TableHead>
+                  <TableHead>Rate</TableHead>
+                  <TableHead>Amount</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -306,6 +378,36 @@ const Wages = () => {
                     <TableCell>{record.hours_worked.toFixed(2)}</TableCell>
                     <TableCell>₹{record.hourly_rate}</TableCell>
                     <TableCell>₹{record.wage_amount.toFixed(2)}</TableCell>
+                    <TableCell>
+                      <Badge variant={record.wage_status === 'wpaid' ? 'default' : 'destructive'}>
+                        {record.wage_status === 'wpaid' ? 'Paid' : 'Not Paid'}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="outline" size="sm">
+                            Actions
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent>
+                          <DropdownMenuItem
+                            onClick={() => handleWageStatusChange(record.task_id, 'wpaid')}
+                            disabled={record.wage_status === 'wpaid'}
+                          >
+                            <Check className="h-4 w-4 mr-2" />
+                            Mark as Paid
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => handleWageStatusChange(record.task_id, 'wnotpaid')}
+                            disabled={record.wage_status === 'wnotpaid'}
+                          >
+                            <X className="h-4 w-4 mr-2" />
+                            Mark as Not Paid
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
