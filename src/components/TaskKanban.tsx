@@ -87,7 +87,7 @@ const TaskKanban = ({ tasks: externalTasks, onTaskStatusChange: externalOnTaskSt
     comments: ''
   });
 
-  const taskStatuses: ('Not Started' | 'In Progress' | 'Completed' | 'On Hold' | 'Cancelled')[] = ['Not Started', 'In Progress', 'Completed', 'On Hold', 'Cancelled'];
+  const taskStatuses: ('Not Started' | 'In Progress' | 'Completed')[] = ['Not Started', 'In Progress', 'Completed'];
   const taskPriorities = ['High', 'Medium', 'Low'];
 
   const { data: fetchedTasks, isLoading: isTasksLoading } = useQuery({
@@ -385,7 +385,7 @@ const TaskKanban = ({ tasks: externalTasks, onTaskStatusChange: externalOnTaskSt
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
       {taskStatuses.map((status) => (
         <div
           key={status}
