@@ -91,6 +91,20 @@ const TimeTrackerWithComment: React.FC<TimeTrackerWithCommentProps> = ({ task, o
         throw new Error('Employee record not found. Please contact admin.');
       }
 
+      // Get task and project details for activity logging
+      const { data: taskDetails, error: taskError } = await supabase
+        .from('tasks')
+        .select(`
+          name,
+          projects(name)
+        `)
+        .eq('id', task.id)
+        .single();
+
+      if (taskError) {
+        throw new Error('Failed to fetch task details');
+      }
+
       const { data, error } = await supabase
         .from('time_entries')
         .insert([{
@@ -102,19 +116,20 @@ const TimeTrackerWithComment: React.FC<TimeTrackerWithCommentProps> = ({ task, o
         .single();
       
       if (error) throw error;
-      return data;
+
+      // Log timer started activity
+      await logTimerStarted(task.name, task.id, taskDetails.projects?.name);
+      
+      return { data, projectName: taskDetails.projects?.name };
     },
-    onSuccess: async (data) => {
+    onSuccess: async (result) => {
       setActiveTimer({
-        id: data.id,
+        id: result.data.id,
         taskId: task.id,
-        startTime: new Date(data.start_time),
-        entryId: data.id
+        startTime: new Date(result.data.start_time),
+        entryId: result.data.id
       });
       setElapsedTime(0);
-      
-      // Log timer started activity
-      await logTimerStarted(task.name, task.id);
       
       toast.success('Timer started!');
       onSuccess();
@@ -127,6 +142,20 @@ const TimeTrackerWithComment: React.FC<TimeTrackerWithCommentProps> = ({ task, o
   const stopTimerMutation = useMutation({
     mutationFn: async (commentText: string) => {
       if (!activeTimer) throw new Error('No active timer');
+      
+      // Get task and project details for activity logging
+      const { data: taskDetails, error: taskError } = await supabase
+        .from('tasks')
+        .select(`
+          name,
+          projects(name)
+        `)
+        .eq('id', task.id)
+        .single();
+
+      if (taskError) {
+        throw new Error('Failed to fetch task details');
+      }
       
       const endTime = new Date();
       const durationMinutes = Math.floor((endTime.getTime() - activeTimer.startTime.getTime()) / 60000);
@@ -143,21 +172,22 @@ const TimeTrackerWithComment: React.FC<TimeTrackerWithCommentProps> = ({ task, o
         .single();
       
       if (error) throw error;
-      return data;
+      
+      return { data, projectName: taskDetails.projects?.name };
     },
-    onSuccess: async (data) => {
+    onSuccess: async (result) => {
       setActiveTimer(null);
       setElapsedTime(0);
       setComment('');
       setShowCommentDialog(false);
       
       // Log time entry and timer stopped activities
-      const hours = Math.floor((data.duration_minutes || 0) / 60);
-      const minutes = (data.duration_minutes || 0) % 60;
+      const hours = Math.floor((result.data.duration_minutes || 0) / 60);
+      const minutes = (result.data.duration_minutes || 0) % 60;
       const durationText = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
       
-      await logTimeEntry(task.name, task.id, durationText, data.comment || undefined);
-      await logTimerStopped(task.name, task.id, durationText);
+      await logTimeEntry(task.name, task.id, durationText, result.data.comment || undefined, result.projectName);
+      await logTimerStopped(task.name, task.id, durationText, result.projectName);
       
       toast.success('Timer stopped!');
       onSuccess();

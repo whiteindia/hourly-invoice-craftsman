@@ -10,6 +10,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
+import { logTimeEntry } from '@/utils/activityLogger';
 
 interface ManualTimeLogProps {
   taskId: string;
@@ -39,6 +40,20 @@ const ManualTimeLog: React.FC<ManualTimeLogProps> = ({ taskId, onSuccess }) => {
         throw new Error('Employee record not found. Please contact admin.');
       }
 
+      // Get task and project details for activity logging
+      const { data: task, error: taskError } = await supabase
+        .from('tasks')
+        .select(`
+          name,
+          projects(name)
+        `)
+        .eq('id', taskId)
+        .single();
+
+      if (taskError) {
+        throw new Error('Failed to fetch task details');
+      }
+
       // Create a completed time entry
       const startTime = new Date(`${date}T09:00:00`);
       const endTime = new Date(startTime.getTime() + (hours * 60 * 60 * 1000));
@@ -57,6 +72,17 @@ const ManualTimeLog: React.FC<ManualTimeLogProps> = ({ taskId, onSuccess }) => {
         .single();
       
       if (error) throw error;
+
+      // Log the activity
+      const durationText = hours === 1 ? '1 hour' : `${hours} hours`;
+      await logTimeEntry(
+        task.name,
+        taskId,
+        durationText,
+        comment,
+        task.projects?.name
+      );
+      
       return data;
     },
     onSuccess: () => {
