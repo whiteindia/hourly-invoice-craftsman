@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -6,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { Plus, DollarSign, Clock, User, Upload, Filter, Edit } from 'lucide-react';
+import { Plus, DollarSign, Clock, User, Upload, Filter, Edit, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -21,10 +22,12 @@ interface Project {
   name: string;
   type: ProjectType;
   hourly_rate: number;
+  project_amount: number;
   total_hours: number;
   status: ProjectStatus;
   start_date?: string;
   created_at: string;
+  brd_file_url?: string;
   clients: {
     name: string;
   };
@@ -42,6 +45,7 @@ const Projects = () => {
     client_id: '',
     type: '' as ProjectType | '',
     hourly_rate: '',
+    project_amount: '',
     basis: 'tasks' as 'tasks' | 'brd',
     start_date: '',
     brd_file: null as File | null
@@ -60,7 +64,8 @@ const Projects = () => {
     { value: "Marketing", rate: 120 },
     { value: "Consulting", rate: 100 },
     { value: "Strategy", rate: 150 },
-    { value: "Technical Writing", rate: 80 }
+    { value: "Technical Writing", rate: 80 },
+    { value: "BRD", rate: 0 }
   ];
 
   // Get years for filter dropdown
@@ -126,13 +131,15 @@ const Projects = () => {
       client_id: string;
       type: ProjectType;
       hourly_rate?: number;
+      project_amount?: number;
       start_date: string;
     }) => {
       const { data, error } = await supabase
         .from('projects')
         .insert({
           ...projectData,
-          hourly_rate: projectData.hourly_rate || 0
+          hourly_rate: projectData.hourly_rate || 0,
+          project_amount: projectData.project_amount || 0
         })
         .select()
         .single();
@@ -147,6 +154,7 @@ const Projects = () => {
         client_id: '', 
         type: '', 
         hourly_rate: '', 
+        project_amount: '',
         basis: 'tasks', 
         start_date: '',
         brd_file: null 
@@ -166,6 +174,7 @@ const Projects = () => {
       name: string;
       type: ProjectType;
       hourly_rate: number;
+      project_amount: number;
       status: ProjectStatus;
       start_date?: string;
     }) => {
@@ -175,6 +184,7 @@ const Projects = () => {
           name: projectData.name,
           type: projectData.type,
           hourly_rate: projectData.hourly_rate,
+          project_amount: projectData.project_amount,
           status: projectData.status,
           start_date: projectData.start_date
         })
@@ -201,16 +211,21 @@ const Projects = () => {
     setNewProject({
       ...newProject,
       type,
-      hourly_rate: projectType && newProject.basis === 'tasks' ? projectType.rate.toString() : ''
+      hourly_rate: projectType && newProject.basis === 'tasks' && type !== 'BRD' ? projectType.rate.toString() : '',
+      project_amount: type === 'BRD' ? '' : newProject.project_amount
     });
   };
 
   const handleBasisChange = (basis: 'tasks' | 'brd') => {
+    const isBRDType = basis === 'brd' || newProject.type === 'BRD';
     const projectType = projectTypes.find(pt => pt.value === newProject.type);
+    
     setNewProject({
       ...newProject,
-      basis,
-      hourly_rate: basis === 'tasks' && projectType ? projectType.rate.toString() : '',
+      basis: isBRDType ? 'brd' : basis,
+      type: isBRDType ? 'BRD' : newProject.type,
+      hourly_rate: basis === 'tasks' && projectType && !isBRDType ? projectType.rate.toString() : '',
+      project_amount: isBRDType ? newProject.project_amount : '',
       brd_file: null
     });
   };
@@ -230,13 +245,20 @@ const Projects = () => {
       return;
     }
 
-    if (newProject.basis === 'tasks' && !newProject.hourly_rate) {
+    const isBRDProject = newProject.type === 'BRD';
+
+    if (!isBRDProject && !newProject.hourly_rate) {
       toast.error('Please enter hourly rate for task-based projects');
       return;
     }
 
-    if (newProject.basis === 'brd' && !newProject.brd_file) {
-      toast.error('Please upload BRD file for BRD-based projects');
+    if (isBRDProject && !newProject.project_amount) {
+      toast.error('Please enter project amount for BRD projects');
+      return;
+    }
+
+    if (isBRDProject && !newProject.brd_file) {
+      toast.error('Please upload BRD file for BRD projects');
       return;
     }
 
@@ -244,7 +266,8 @@ const Projects = () => {
       name: newProject.name,
       client_id: newProject.client_id,
       type: newProject.type as ProjectType,
-      hourly_rate: newProject.basis === 'tasks' ? parseFloat(newProject.hourly_rate) : undefined,
+      hourly_rate: !isBRDProject ? parseFloat(newProject.hourly_rate) : undefined,
+      project_amount: isBRDProject ? parseFloat(newProject.project_amount) : undefined,
       start_date: newProject.start_date
     });
   };
@@ -262,6 +285,7 @@ const Projects = () => {
       name: editingProject.name,
       type: editingProject.type,
       hourly_rate: editingProject.hourly_rate,
+      project_amount: editingProject.project_amount || 0,
       status: editingProject.status,
       start_date: editingProject.start_date
     });
@@ -273,6 +297,15 @@ const Projects = () => {
       client_id: 'all-clients', 
       status: 'all-statuses' 
     });
+  };
+
+  const handleBRDClick = (project: Project) => {
+    if (project.brd_file_url) {
+      window.open(project.brd_file_url, '_blank');
+    } else {
+      // For now, we'll show a placeholder since BRD storage isn't fully implemented yet
+      window.open(`/brd-placeholder/${project.id}`, '_blank');
+    }
   };
 
   if (isLoading) {
@@ -360,7 +393,7 @@ const Projects = () => {
                     </SelectContent>
                   </Select>
                 </div>
-                {newProject.basis === 'tasks' && (
+                {newProject.type !== 'BRD' && newProject.basis === 'tasks' && (
                   <div className="space-y-2">
                     <Label htmlFor="hourlyRate">Hourly Rate (₹)</Label>
                     <Input
@@ -372,23 +405,35 @@ const Projects = () => {
                     />
                   </div>
                 )}
-                {newProject.basis === 'brd' && (
-                  <div className="space-y-2">
-                    <Label htmlFor="brdFile">Upload BRD (PDF)</Label>
-                    <div className="flex items-center space-x-2">
+                {(newProject.basis === 'brd' || newProject.type === 'BRD') && (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="projectAmount">Total Project Value (₹)</Label>
                       <Input
-                        id="brdFile"
-                        type="file"
-                        accept=".pdf"
-                        onChange={handleFileUpload}
-                        className="flex-1"
+                        id="projectAmount"
+                        type="number"
+                        value={newProject.project_amount}
+                        onChange={(e) => setNewProject({...newProject, project_amount: e.target.value})}
+                        placeholder="50000"
                       />
-                      <Upload className="h-4 w-4 text-gray-500" />
                     </div>
-                    {newProject.brd_file && (
-                      <p className="text-sm text-green-600">File selected: {newProject.brd_file.name}</p>
-                    )}
-                  </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="brdFile">Upload BRD (PDF)</Label>
+                      <div className="flex items-center space-x-2">
+                        <Input
+                          id="brdFile"
+                          type="file"
+                          accept=".pdf"
+                          onChange={handleFileUpload}
+                          className="flex-1"
+                        />
+                        <Upload className="h-4 w-4 text-gray-500" />
+                      </div>
+                      {newProject.brd_file && (
+                        <p className="text-sm text-green-600">File selected: {newProject.brd_file.name}</p>
+                      )}
+                    </div>
+                  </>
                 )}
                 <div className="space-y-2">
                   <Label htmlFor="startDate">Start Date</Label>
@@ -446,16 +491,30 @@ const Projects = () => {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="editHourlyRate">Hourly Rate (₹)</Label>
-                  <Input
-                    id="editHourlyRate"
-                    type="number"
-                    value={editingProject.hourly_rate}
-                    onChange={(e) => setEditingProject({...editingProject, hourly_rate: parseFloat(e.target.value) || 0})}
-                    placeholder="100"
-                  />
-                </div>
+                {editingProject.type !== 'BRD' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="editHourlyRate">Hourly Rate (₹)</Label>
+                    <Input
+                      id="editHourlyRate"
+                      type="number"
+                      value={editingProject.hourly_rate}
+                      onChange={(e) => setEditingProject({...editingProject, hourly_rate: parseFloat(e.target.value) || 0})}
+                      placeholder="100"
+                    />
+                  </div>
+                )}
+                {editingProject.type === 'BRD' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="editProjectAmount">Total Project Value (₹)</Label>
+                    <Input
+                      id="editProjectAmount"
+                      type="number"
+                      value={editingProject.project_amount || 0}
+                      onChange={(e) => setEditingProject({...editingProject, project_amount: parseFloat(e.target.value) || 0})}
+                      placeholder="50000"
+                    />
+                  </div>
+                )}
                 <div className="space-y-2">
                   <Label htmlFor="editStatus">Project Status</Label>
                   <Select value={editingProject.status} onValueChange={(value) => setEditingProject({...editingProject, status: value as ProjectStatus})}>
@@ -585,10 +644,20 @@ const Projects = () => {
                     </Badge>
                   </div>
                   <div className="flex items-center justify-between text-sm">
-                    <div className="flex items-center space-x-1">
-                      <DollarSign className="h-4 w-4 text-green-600" />
-                      <span className="font-medium">₹{project.hourly_rate}/hr</span>
-                    </div>
+                    {project.type === 'BRD' ? (
+                      <div 
+                        className="flex items-center space-x-2 cursor-pointer text-blue-600 hover:text-blue-800"
+                        onClick={() => handleBRDClick(project)}
+                      >
+                        <FileText className="h-4 w-4" />
+                        <span className="font-medium">BRD Document</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center space-x-1">
+                        <DollarSign className="h-4 w-4 text-green-600" />
+                        <span className="font-medium">₹{project.hourly_rate}/hr</span>
+                      </div>
+                    )}
                     <div className="flex items-center space-x-1">
                       <Clock className="h-4 w-4 text-blue-600" />
                       <span>{project.total_hours}h logged</span>
@@ -603,7 +672,10 @@ const Projects = () => {
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-gray-600">Total Value</span>
                       <span className="font-bold text-lg text-green-600">
-                        ₹{(project.hourly_rate * project.total_hours).toFixed(2)}
+                        {project.type === 'BRD' ? 
+                          `₹${(project.project_amount || 0).toFixed(2)}` : 
+                          `₹${(project.hourly_rate * project.total_hours).toFixed(2)}`
+                        }
                       </span>
                     </div>
                   </div>
@@ -647,6 +719,8 @@ const Projects = () => {
         return 'bg-blue-100 text-blue-800';
       case 'Strategy':
         return 'bg-orange-100 text-orange-800';
+      case 'BRD':
+        return 'bg-indigo-100 text-indigo-800';
       default:
         return 'bg-gray-100 text-gray-800';
     }

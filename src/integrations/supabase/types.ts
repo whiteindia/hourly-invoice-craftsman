@@ -290,11 +290,13 @@ export type Database = {
       }
       projects: {
         Row: {
+          brd_file_url: string | null
           client_id: string
           created_at: string
           hourly_rate: number
           id: string
           name: string
+          project_amount: number | null
           start_date: string | null
           status: Database["public"]["Enums"]["project_status"]
           total_hours: number
@@ -302,11 +304,13 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          brd_file_url?: string | null
           client_id: string
           created_at?: string
           hourly_rate: number
           id?: string
           name: string
+          project_amount?: number | null
           start_date?: string | null
           status?: Database["public"]["Enums"]["project_status"]
           total_hours?: number
@@ -314,11 +318,13 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          brd_file_url?: string | null
           client_id?: string
           created_at?: string
           hourly_rate?: number
           id?: string
           name?: string
+          project_amount?: number | null
           start_date?: string | null
           status?: Database["public"]["Enums"]["project_status"]
           total_hours?: number
@@ -576,6 +582,7 @@ export type Database = {
         | "Consulting"
         | "Strategy"
         | "Technical Writing"
+        | "BRD"
       task_status: "Not Started" | "In Progress" | "Completed"
     }
     CompositeTypes: {
@@ -709,6 +716,7 @@ export const Constants = {
         "Consulting",
         "Strategy",
         "Technical Writing",
+        "BRD",
       ],
       task_status: ["Not Started", "In Progress", "Completed"],
     },
