@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, FileText, Download, Eye, DollarSign, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, FileText, Download, Eye, DollarSign, ChevronDown, ChevronUp, Filter } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -69,6 +69,7 @@ const Invoices = () => {
   });
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [expandedInvoice, setExpandedInvoice] = useState<string | null>(null);
+  const [globalServiceFilter, setGlobalServiceFilter] = useState<string>('all');
 
   // Fetch invoices with client and project data
   const { data: invoices = [], isLoading } = useQuery({
@@ -144,6 +145,26 @@ const Invoices = () => {
       return data as InvoiceTask[];
     },
     enabled: !!expandedInvoice
+  });
+
+  // Fetch services for the filter
+  const { data: services = [] } = useQuery({
+    queryKey: ['services'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('services')
+        .select('*')
+        .order('name');
+      
+      if (error) throw error;
+      return data;
+    }
+  });
+
+  // Filter invoices based on global service filter
+  const filteredInvoices = invoices.filter(invoice => {
+    if (globalServiceFilter === 'all') return true;
+    return invoice.projects?.services?.id === globalServiceFilter;
   });
 
   // Create invoice mutation
@@ -391,108 +412,128 @@ const Invoices = () => {
 
   return (
     <Navigation>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex justify-between items-center mb-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+        <div className="flex justify-between items-center mb-6">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Invoices</h1>
             <p className="text-gray-600 mt-2">Generate and manage your invoices</p>
           </div>
           
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="bg-blue-600 hover:bg-blue-700">
-                <Plus className="h-4 w-4 mr-2" />
-                Create Invoice
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl">
-              <DialogHeader>
-                <DialogTitle>Create New Invoice</DialogTitle>
-                <DialogDescription>
-                  Select completed tasks to generate an invoice.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="project">Project</Label>
-                  <Select value={newInvoice.project_id} onValueChange={handleProjectChange}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a project" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {projects.map((project) => (
-                        <SelectItem key={project.id} value={project.id}>
-                          {project.name} ({project.clients.name})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+          <div className="flex items-center space-x-4">
+            {/* Global Service Filter */}
+            <div className="flex items-center space-x-2">
+              <Filter className="h-4 w-4 text-gray-500" />
+              <Select value={globalServiceFilter} onValueChange={setGlobalServiceFilter}>
+                <SelectTrigger className="w-48">
+                  <SelectValue placeholder="Filter by service" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Services</SelectItem>
+                  {services.map((service) => (
+                    <SelectItem key={service.id} value={service.id}>
+                      {service.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-                {newInvoice.project_id && (
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <DialogTrigger asChild>
+                <Button className="bg-blue-600 hover:bg-blue-700">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create Invoice
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl">
+                <DialogHeader>
+                  <DialogTitle>Create New Invoice</DialogTitle>
+                  <DialogDescription>
+                    Select completed tasks to generate an invoice.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label>Select Tasks to Invoice</Label>
-                    <div className="border rounded-lg p-4 max-h-60 overflow-y-auto">
-                      {availableTasks.length === 0 ? (
-                        <p className="text-gray-500 text-sm">No completed tasks available for this project.</p>
-                      ) : (
-                        <div className="space-y-3">
-                          {availableTasks.map((task) => (
-                            <div key={task.id} className="flex items-center space-x-3 p-2 hover:bg-gray-50 rounded">
-                              <Checkbox
-                                id={`task-${task.id}`}
-                                checked={newInvoice.selectedTasks.includes(task.id)}
-                                onCheckedChange={(checked) => handleTaskSelection(task.id, checked as boolean)}
-                              />
-                              <div className="flex-1">
-                                <label htmlFor={`task-${task.id}`} className="text-sm font-medium cursor-pointer">
-                                  {task.name}
-                                </label>
-                                <div className="text-xs text-gray-600">
-                                  {task.hours}h × ₹{task.projects.hourly_rate}/hr = ₹{(task.hours * task.projects.hourly_rate).toFixed(2)}
+                    <Label htmlFor="project">Project</Label>
+                    <Select value={newInvoice.project_id} onValueChange={handleProjectChange}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a project" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {projects.map((project) => (
+                          <SelectItem key={project.id} value={project.id}>
+                            {project.name} ({project.clients.name})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {newInvoice.project_id && (
+                    <div className="space-y-2">
+                      <Label>Select Tasks to Invoice</Label>
+                      <div className="border rounded-lg p-4 max-h-60 overflow-y-auto">
+                        {availableTasks.length === 0 ? (
+                          <p className="text-gray-500 text-sm">No completed tasks available for this project.</p>
+                        ) : (
+                          <div className="space-y-3">
+                            {availableTasks.map((task) => (
+                              <div key={task.id} className="flex items-center space-x-3 p-2 hover:bg-gray-50 rounded">
+                                <Checkbox
+                                  id={`task-${task.id}`}
+                                  checked={newInvoice.selectedTasks.includes(task.id)}
+                                  onCheckedChange={(checked) => handleTaskSelection(task.id, checked as boolean)}
+                                />
+                                <div className="flex-1">
+                                  <label htmlFor={`task-${task.id}`} className="text-sm font-medium cursor-pointer">
+                                    {task.name}
+                                  </label>
+                                  <div className="text-xs text-gray-600">
+                                    {task.hours}h × ₹{task.projects.hourly_rate}/hr = ₹{(task.hours * task.projects.hourly_rate).toFixed(2)}
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          ))}
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {newInvoice.selectedTasks.length > 0 && (
+                    <div className="p-4 bg-gray-50 rounded-lg">
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <span className="font-medium">Total Hours:</span>
+                          <span className="text-lg font-bold">
+                            {getSelectedTasksTotal().totalHours.toFixed(2)}h
+                          </span>
                         </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {newInvoice.selectedTasks.length > 0 && (
-                  <div className="p-4 bg-gray-50 rounded-lg">
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-center">
-                        <span className="font-medium">Total Hours:</span>
-                        <span className="text-lg font-bold">
-                          {getSelectedTasksTotal().totalHours.toFixed(2)}h
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="font-medium">Total Amount:</span>
-                        <span className="text-2xl font-bold text-green-600">
-                          ₹{getSelectedTasksTotal().totalAmount.toFixed(2)}
-                        </span>
+                        <div className="flex justify-between items-center">
+                          <span className="font-medium">Total Amount:</span>
+                          <span className="text-2xl font-bold text-green-600">
+                            ₹{getSelectedTasksTotal().totalAmount.toFixed(2)}
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                <Button 
-                  onClick={handleCreateInvoice} 
-                  className="w-full"
-                  disabled={newInvoice.selectedTasks.length === 0 || createInvoiceMutation.isPending}
-                >
-                  {createInvoiceMutation.isPending ? 'Creating...' : 'Create Invoice'}
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
+                  <Button 
+                    onClick={handleCreateInvoice} 
+                    className="w-full"
+                    disabled={newInvoice.selectedTasks.length === 0 || createInvoiceMutation.isPending}
+                  >
+                    {createInvoiceMutation.isPending ? 'Creating...' : 'Create Invoice'}
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
 
         {/* Revenue Summary */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
           <Card>
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
@@ -530,97 +571,108 @@ const Invoices = () => {
 
         {/* Invoices List */}
         <div className="space-y-4">
-          {invoices.map((invoice) => (
-            <Card key={invoice.id} className="hover:shadow-lg transition-shadow duration-200">
-              <CardContent className="p-6">
-                <div className="flex justify-between items-start">
-                  <div className="flex-1">
-                    <div className="flex items-center space-x-4 mb-2">
-                      <h3 className="text-lg font-semibold">{invoice.id}</h3>
-                      <Badge className={getStatusColor(invoice.status)}>
-                        {invoice.status}
-                      </Badge>
+          {filteredInvoices.length === 0 ? (
+            <Card>
+              <CardContent className="p-6 text-center">
+                <p className="text-gray-500">
+                  No invoices found
+                  {globalServiceFilter !== 'all' && ` for ${services.find(s => s.id === globalServiceFilter)?.name}`}.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            filteredInvoices.map((invoice) => (
+              <Card key={invoice.id} className="hover:shadow-lg transition-shadow duration-200">
+                <CardContent className="p-6">
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-4 mb-2">
+                        <h3 className="text-lg font-semibold">{invoice.id}</h3>
+                        <Badge className={getStatusColor(invoice.status)}>
+                          {invoice.status}
+                        </Badge>
+                      </div>
+                      <p className="text-gray-600 mb-1">{invoice.clients.name}</p>
+                      <p className="text-sm text-gray-500">{invoice.projects.name}</p>
+                      <div className="mt-3 flex items-center space-x-6 text-sm text-gray-600">
+                        <span>{invoice.hours}h × ₹{invoice.rate}/hr</span>
+                        <span>Due: {invoice.due_date}</span>
+                      </div>
                     </div>
-                    <p className="text-gray-600 mb-1">{invoice.clients.name}</p>
-                    <p className="text-sm text-gray-500">{invoice.projects.name}</p>
-                    <div className="mt-3 flex items-center space-x-6 text-sm text-gray-600">
-                      <span>{invoice.hours}h × ₹{invoice.rate}/hr</span>
-                      <span>Due: {invoice.due_date}</span>
+                    
+                    <div className="text-right">
+                      <p className="text-2xl font-bold text-gray-900 mb-4">
+                        ₹{invoice.amount.toFixed(2)}
+                      </p>
+                      <div className="flex space-x-2 mb-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setExpandedInvoice(expandedInvoice === invoice.id ? null : invoice.id)}
+                        >
+                          {expandedInvoice === invoice.id ? (
+                            <ChevronUp className="h-4 w-4 mr-1" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4 mr-1" />
+                          )}
+                          Tasks
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => generatePDF(invoice)}
+                        >
+                          <Download className="h-4 w-4 mr-1" />
+                          PDF
+                        </Button>
+                        {invoice.status === 'Draft' && (
+                          <Button 
+                            size="sm"
+                            onClick={() => updateInvoiceStatus(invoice.id, 'Sent')}
+                            disabled={updateInvoiceStatusMutation.isPending}
+                          >
+                            Send
+                          </Button>
+                        )}
+                        {invoice.status === 'Sent' && (
+                          <Button 
+                            size="sm"
+                            onClick={() => updateInvoiceStatus(invoice.id, 'Paid')}
+                            className="bg-green-600 hover:bg-green-700"
+                            disabled={updateInvoiceStatusMutation.isPending}
+                          >
+                            Mark Paid
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   </div>
                   
-                  <div className="text-right">
-                    <p className="text-2xl font-bold text-gray-900 mb-4">
-                      ₹{invoice.amount.toFixed(2)}
-                    </p>
-                    <div className="flex space-x-2 mb-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setExpandedInvoice(expandedInvoice === invoice.id ? null : invoice.id)}
-                      >
-                        {expandedInvoice === invoice.id ? (
-                          <ChevronUp className="h-4 w-4 mr-1" />
-                        ) : (
-                          <ChevronDown className="h-4 w-4 mr-1" />
-                        )}
-                        Tasks
-                      </Button>
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => generatePDF(invoice)}
-                      >
-                        <Download className="h-4 w-4 mr-1" />
-                        PDF
-                      </Button>
-                      {invoice.status === 'Draft' && (
-                        <Button 
-                          size="sm"
-                          onClick={() => updateInvoiceStatus(invoice.id, 'Sent')}
-                          disabled={updateInvoiceStatusMutation.isPending}
-                        >
-                          Send
-                        </Button>
-                      )}
-                      {invoice.status === 'Sent' && (
-                        <Button 
-                          size="sm"
-                          onClick={() => updateInvoiceStatus(invoice.id, 'Paid')}
-                          className="bg-green-600 hover:bg-green-700"
-                          disabled={updateInvoiceStatusMutation.isPending}
-                        >
-                          Mark Paid
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                
-                {expandedInvoice === invoice.id && (
-                  <div className="mt-4 pt-4 border-t">
-                    <h4 className="font-medium mb-3">Tasks in this invoice:</h4>
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Task Name</TableHead>
-                          <TableHead>Hours</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {invoiceTasks.map((invoiceTask, index) => (
-                          <TableRow key={index}>
-                            <TableCell>{invoiceTask.tasks.name}</TableCell>
-                            <TableCell>{invoiceTask.tasks.hours}h</TableCell>
+                  {expandedInvoice === invoice.id && (
+                    <div className="mt-4 pt-4 border-t">
+                      <h4 className="font-medium mb-3">Tasks in this invoice:</h4>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Task Name</TableHead>
+                            <TableHead>Hours</TableHead>
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          ))}
+                        </TableHeader>
+                        <TableBody>
+                          {invoiceTasks.map((invoiceTask, index) => (
+                            <TableRow key={index}>
+                              <TableCell>{invoiceTask.tasks.name}</TableCell>
+                              <TableCell>{invoiceTask.tasks.hours}h</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ))
+          )}
         </div>
       </div>
     </Navigation>

@@ -1,241 +1,193 @@
 import React, { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Filter, Clock, CheckCircle, X } from 'lucide-react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { CalendarIcon, Download, Filter } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import Navigation from '@/components/Navigation';
-import { toast } from 'sonner';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { format, startOfMonth, endOfMonth } from 'date-fns';
+import { cn } from '@/lib/utils';
 
-interface WageTask {
+interface WageRecord {
+  id: string;
+  employee_id: string;
+  task_id: string;
+  hours_worked: number;
+  hourly_rate: number;
+  wage_amount: number;
+  date: string;
+  tasks: {
+    name: string;
+    projects: {
+      name: string;
+      services: {
+        id: string;
+        name: string;
+      };
+    };
+  };
+  employees: {
+    name: string;
+  };
+}
+
+interface Employee {
   id: string;
   name: string;
-  hours: number;
-  date: string;
-  wage_status: 'wpaid' | 'wnotpaid';
-  assignee: { name: string } | null;
-  projects: { name: string; clients: { name: string } };
-  time_entries: { duration_minutes: number; comment: string; start_time: string }[];
+}
+
+interface Service {
+  id: string;
+  name: string;
 }
 
 const Wages = () => {
-  const queryClient = useQueryClient();
-  const [filters, setFilters] = useState({
-    assignee: '',
-    project: '',
-    client: '',
-    status: '',
-    year: '',
-    month: ''
-  });
+  const [selectedEmployee, setSelectedEmployee] = useState<string>('all');
+  const [selectedMonth, setSelectedMonth] = useState<Date>(new Date());
+  const [globalServiceFilter, setGlobalServiceFilter] = useState<string>('all');
 
-  // Generate year options (current year and previous 5 years)
-  const currentYear = new Date().getFullYear();
-  const yearOptions = Array.from({ length: 6 }, (_, i) => currentYear - i);
-
-  // Month options
-  const monthOptions = [
-    { value: '01', label: 'January' },
-    { value: '02', label: 'February' },
-    { value: '03', label: 'March' },
-    { value: '04', label: 'April' },
-    { value: '05', label: 'May' },
-    { value: '06', label: 'June' },
-    { value: '07', label: 'July' },
-    { value: '08', label: 'August' },
-    { value: '09', label: 'September' },
-    { value: '10', label: 'October' },
-    { value: '11', label: 'November' },
-    { value: '12', label: 'December' },
-  ];
-
-  const { data: wageTasks = [], isLoading } = useQuery({
-    queryKey: ['wage-tasks', filters],
+  // Fetch wage records
+  const { data: wageRecords = [], isLoading } = useQuery({
+    queryKey: ['wage-records', selectedEmployee, selectedMonth, globalServiceFilter],
     queryFn: async () => {
+      const startDate = startOfMonth(selectedMonth).toISOString();
+      const endDate = endOfMonth(selectedMonth).toISOString();
+
       let query = supabase
-        .from('tasks')
+        .from('wage_records')
         .select(`
           *,
-          assignee:employees!tasks_assignee_id_fkey(name),
-          projects!inner(
+          tasks(
             name,
-            clients!inner(name)
+            projects(
+              name,
+              services(
+                id,
+                name
+              )
+            )
           ),
-          time_entries(duration_minutes, comment, start_time)
+          employees(name)
         `)
-        .eq('invoiced', true)
+        .gte('date', startDate)
+        .lte('date', endDate)
         .order('date', { ascending: false });
 
-      if (filters.assignee && filters.assignee !== 'all') {
-        query = query.eq('assignee_id', filters.assignee);
-      }
-      if (filters.project && filters.project !== 'all') {
-        query = query.eq('project_id', filters.project);
-      }
-      if (filters.status && filters.status !== 'all') {
-        query = query.eq('wage_status', filters.status);
-      }
-      if (filters.year && filters.year !== 'all') {
-        const startDate = `${filters.year}-01-01`;
-        const endDate = `${filters.year}-12-31`;
-        query = query.gte('date', startDate).lte('date', endDate);
-      }
-      if (filters.month && filters.month !== 'all' && filters.year && filters.year !== 'all') {
-        const startDate = `${filters.year}-${filters.month}-01`;
-        const daysInMonth = new Date(parseInt(filters.year), parseInt(filters.month), 0).getDate();
-        const endDate = `${filters.year}-${filters.month}-${daysInMonth.toString().padStart(2, '0')}`;
-        query = query.gte('date', startDate).lte('date', endDate);
+      if (selectedEmployee !== 'all') {
+        query = query.eq('employee_id', selectedEmployee);
       }
 
       const { data, error } = await query;
-      if (error) throw error;
-      return data as WageTask[];
+
+      if (error) {
+        console.error("Error fetching wage records:", error);
+        throw error;
+      }
+
+      return data as WageRecord[];
     }
   });
 
+  // Fetch employees
   const { data: employees = [] } = useQuery({
-    queryKey: ['employees-for-wages'],
+    queryKey: ['employees'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('employees')
-        .select('id, name')
+        .select('*')
         .order('name');
-      
-      if (error) throw error;
-      return data;
+
+      if (error) {
+        console.error("Error fetching employees:", error);
+        throw error;
+      }
+
+      return data as Employee[];
     }
   });
 
-  const { data: projects = [] } = useQuery({
-    queryKey: ['projects-for-wages'],
+  // Fetch services
+  const { data: services = [] } = useQuery({
+    queryKey: ['services'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('projects')
-        .select('id, name, clients(name)')
+        .from('services')
+        .select('*')
         .order('name');
-      
-      if (error) throw error;
-      return data;
+
+      if (error) {
+        console.error("Error fetching services:", error);
+        throw error;
+      }
+
+      return data as Service[];
     }
   });
 
-  const updateWageStatusMutation = useMutation({
-    mutationFn: async ({ taskId, status }: { taskId: string; status: 'wpaid' | 'wnotpaid' }) => {
-      const { data, error } = await supabase
-        .from('tasks')
-        .update({ wage_status: status })
-        .eq('id', taskId)
-        .select()
-        .single();
-      
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['wage-tasks'] });
-      toast.success('Wage status updated!');
-    },
-    onError: (error) => {
-      toast.error('Failed to update wage status: ' + error.message);
-    }
+  // Filter wage records based on filters
+  const filteredWageRecords = wageRecords.filter(record => {
+    const matchesEmployee = selectedEmployee === 'all' || record.employee_id === selectedEmployee;
+    const matchesService = globalServiceFilter === 'all' || record.tasks?.projects?.services?.id === globalServiceFilter;
+    return matchesEmployee && matchesService;
   });
 
-  const clearFilters = () => {
-    setFilters({ assignee: '', project: '', client: '', status: '', year: '', month: '' });
-  };
-
-  const groupedTasks = wageTasks.reduce((acc, task) => {
-    const assigneeName = task.assignee?.name || 'Unassigned';
-    if (!acc[assigneeName]) {
-      acc[assigneeName] = [];
-    }
-    acc[assigneeName].push(task);
-    return acc;
-  }, {} as Record<string, WageTask[]>);
-
-  const formatTime = (dateString: string) => {
-    return new Date(dateString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  };
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
-        <Navigation />
-        <div className="flex items-center justify-center py-8">
-          <div className="text-lg">Loading wages...</div>
-        </div>
-      </div>
-    );
-  }
+  // Calculate total hours and total wages
+  const totalHours = filteredWageRecords.reduce((sum, record) => sum + record.hours_worked, 0);
+  const totalWages = filteredWageRecords.reduce((sum, record) => sum + record.wage_amount, 0);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
-      <Navigation />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex justify-between items-center mb-8">
+    <Navigation>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+        <div className="flex justify-between items-center mb-6">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Wages</h1>
-            <p className="text-gray-600 mt-2">Track employee wage payments for completed tasks</p>
+            <h1 className="text-3xl font-bold text-gray-900">Employee Wages</h1>
+            <p className="text-gray-600 mt-2">Track employee hours and calculate wages</p>
+          </div>
+          
+          <div className="flex items-center space-x-4">
+            {/* Global Service Filter */}
+            <div className="flex items-center space-x-2">
+              <Filter className="h-4 w-4 text-gray-500" />
+              <Select value={globalServiceFilter} onValueChange={setGlobalServiceFilter}>
+                <SelectTrigger className="w-48">
+                  <SelectValue placeholder="Filter by service" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Services</SelectItem>
+                  {services.map((service) => (
+                    <SelectItem key={service.id} value={service.id}>
+                      {service.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <Button variant="outline">
+              <Download className="h-4 w-4 mr-2" />
+              Export Report
+            </Button>
           </div>
         </div>
 
         {/* Filters */}
         <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <Filter className="h-5 w-5 mr-2" />
-              Filters
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
+          <CardContent className="p-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Year</Label>
-                <Select value={filters.year} onValueChange={(value) => setFilters({...filters, year: value, month: value === 'all' ? '' : filters.month})}>
+                <Label>Employee</Label>
+                <Select value={selectedEmployee} onValueChange={setSelectedEmployee}>
                   <SelectTrigger>
-                    <SelectValue placeholder="All years" />
+                    <SelectValue placeholder="Select employee" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All years</SelectItem>
-                    {yearOptions.map((year) => (
-                      <SelectItem key={year} value={year.toString()}>
-                        {year}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Month</Label>
-                <Select 
-                  value={filters.month} 
-                  onValueChange={(value) => setFilters({...filters, month: value})}
-                  disabled={!filters.year || filters.year === 'all'}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="All months" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All months</SelectItem>
-                    {monthOptions.map((month) => (
-                      <SelectItem key={month.value} value={month.value}>
-                        {month.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Assignee</Label>
-                <Select value={filters.assignee} onValueChange={(value) => setFilters({...filters, assignee: value})}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="All assignees" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All assignees</SelectItem>
+                    <SelectItem value="all">All Employees</SelectItem>
                     {employees.map((employee) => (
                       <SelectItem key={employee.id} value={employee.id}>
                         {employee.name}
@@ -244,126 +196,105 @@ const Wages = () => {
                   </SelectContent>
                 </Select>
               </div>
+
               <div className="space-y-2">
-                <Label>Project</Label>
-                <Select value={filters.project} onValueChange={(value) => setFilters({...filters, project: value})}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="All projects" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All projects</SelectItem>
-                    {projects.map((project) => (
-                      <SelectItem key={project.id} value={project.id}>
-                        {project.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label>Month</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !selectedMonth && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {selectedMonth ? format(selectedMonth, "MMMM yyyy") : "Select month"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={selectedMonth}
+                      onSelect={(date) => date && setSelectedMonth(date)}
+                      className="pointer-events-auto"
+                    />
+                  </PopoverContent>
+                </Popover>
               </div>
-              <div className="space-y-2">
-                <Label>Wage Status</Label>
-                <Select value={filters.status} onValueChange={(value) => setFilters({...filters, status: value})}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="All statuses" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All statuses</SelectItem>
-                    <SelectItem value="wpaid">Wage Paid</SelectItem>
-                    <SelectItem value="wnotpaid">Wage Not Paid</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button variant="outline" onClick={clearFilters}>
-                Clear Filters
-              </Button>
             </div>
           </CardContent>
         </Card>
 
-        {/* Grouped Tasks by Assignee */}
-        <div className="space-y-6">
-          {Object.entries(groupedTasks).map(([assigneeName, tasks]) => (
-            <Card key={assigneeName}>
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  <span>{assigneeName}</span>
-                  <Badge variant="outline">
-                    {tasks.length} task{tasks.length !== 1 ? 's' : ''}
-                  </Badge>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {tasks.map((task) => (
-                    <div key={task.id} className="border rounded-lg p-4 bg-gray-50">
-                      <div className="flex items-center justify-between mb-3">
-                        <div>
-                          <h4 className="font-medium">{task.name}</h4>
-                          <p className="text-sm text-gray-600">
-                            {task.projects.name} • {task.projects.clients.name}
-                          </p>
-                          <p className="text-sm text-gray-500">Date: {task.date}</p>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <Badge variant={task.wage_status === 'wpaid' ? 'default' : 'secondary'}>
-                            {task.wage_status === 'wpaid' ? 'Wage Paid' : 'Wage Not Paid'}
-                          </Badge>
-                          <Select 
-                            value={task.wage_status || 'wnotpaid'} 
-                            onValueChange={(value) => updateWageStatusMutation.mutate({ 
-                              taskId: task.id, 
-                              status: value as 'wpaid' | 'wnotpaid' 
-                            })}
-                          >
-                            <SelectTrigger className="w-32">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="wnotpaid">Not Paid</SelectItem>
-                              <SelectItem value="wpaid">Paid</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                      
-                      {/* Time Slots */}
-                      {task.time_entries && task.time_entries.length > 0 && (
-                        <div className="space-y-2">
-                          <h5 className="text-sm font-medium text-gray-700">Time Slots:</h5>
-                          {task.time_entries.map((entry, index) => (
-                            <div key={index} className="text-sm bg-white p-2 rounded border">
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center space-x-2">
-                                  <Clock className="h-3 w-3 text-gray-500" />
-                                  <span>{Math.round((entry.duration_minutes || 0) / 60 * 100) / 100}h</span>
-                                  <span>•</span>
-                                  <span>{formatTime(entry.start_time)}</span>
-                                </div>
-                              </div>
-                              {entry.comment && (
-                                <p className="text-gray-600 mt-1 text-xs">{entry.comment}</p>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        {Object.keys(groupedTasks).length === 0 && (
+        {/* Summary Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
           <Card>
-            <CardContent className="text-center py-8 text-gray-500">
-              No billed tasks found with current filters.
+            <CardContent className="p-6">
+              <CardTitle>Total Hours</CardTitle>
+              <CardDescription>Total hours worked this month</CardDescription>
+              <div className="text-2xl font-bold">{totalHours.toFixed(2)} hours</div>
             </CardContent>
           </Card>
-        )}
+
+          <Card>
+            <CardContent className="p-6">
+              <CardTitle>Total Wages</CardTitle>
+              <CardDescription>Total wages to be paid this month</CardDescription>
+              <div className="text-2xl font-bold">₹{totalWages.toFixed(2)}</div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-6">
+              <CardTitle>Average Hourly Rate</CardTitle>
+              <CardDescription>Average hourly rate across all employees</CardDescription>
+              <div className="text-2xl font-bold">
+                ₹{(filteredWageRecords.length > 0 ? totalWages / totalHours : 0).toFixed(2)}/hour
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Detailed Wage Records */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Detailed Wage Records</CardTitle>
+            <CardDescription>
+              Employee work hours and wage calculations for {format(selectedMonth, "MMMM yyyy")}
+              {globalServiceFilter !== 'all' && ` filtered by ${services.find(s => s.id === globalServiceFilter)?.name}`}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Employee</TableHead>
+                  <TableHead>Task</TableHead>
+                  <TableHead>Service</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Hours Worked</TableHead>
+                  <TableHead>Hourly Rate</TableHead>
+                  <TableHead>Wage Amount</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredWageRecords.map((record) => (
+                  <TableRow key={record.id}>
+                    <TableCell>{record.employees?.name}</TableCell>
+                    <TableCell>{record.tasks?.name}</TableCell>
+                    <TableCell>{record.tasks?.projects?.services?.name}</TableCell>
+                    <TableCell>{format(new Date(record.date), "PPP")}</TableCell>
+                    <TableCell>{record.hours_worked}</TableCell>
+                    <TableCell>₹{record.hourly_rate}</TableCell>
+                    <TableCell>₹{record.wage_amount}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
       </div>
-    </div>
+    </Navigation>
   );
 };
 
