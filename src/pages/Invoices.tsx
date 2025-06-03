@@ -7,11 +7,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Plus, FileText, Download, Eye, DollarSign } from 'lucide-react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Plus, FileText, Download, Eye, DollarSign, ChevronDown, ChevronUp } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { Database } from '@/integrations/supabase/types';
+import Navigation from '@/components/Navigation';
 
 type InvoiceStatus = Database['public']['Enums']['invoice_status'];
 
@@ -49,6 +51,14 @@ interface Project {
   };
 }
 
+interface InvoiceTask {
+  tasks: {
+    id: string;
+    name: string;
+    hours: number;
+  };
+}
+
 const Invoices = () => {
   const queryClient = useQueryClient();
   const [newInvoice, setNewInvoice] = useState({
@@ -57,6 +67,7 @@ const Invoices = () => {
     description: ''
   });
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [expandedInvoice, setExpandedInvoice] = useState<string | null>(null);
 
   // Fetch invoices with client and project data
   const { data: invoices = [], isLoading } = useQuery({
@@ -113,6 +124,25 @@ const Invoices = () => {
       return data as Task[];
     },
     enabled: !!newInvoice.project_id
+  });
+
+  // Fetch tasks for expanded invoice
+  const { data: invoiceTasks = [] } = useQuery({
+    queryKey: ['invoice-tasks', expandedInvoice],
+    queryFn: async () => {
+      if (!expandedInvoice) return [];
+      
+      const { data, error } = await supabase
+        .from('invoice_tasks')
+        .select(`
+          tasks(id, name, hours)
+        `)
+        .eq('invoice_id', expandedInvoice);
+      
+      if (error) throw error;
+      return data as InvoiceTask[];
+    },
+    enabled: !!expandedInvoice
   });
 
   // Create invoice mutation
@@ -270,19 +300,77 @@ const Invoices = () => {
     updateInvoiceStatusMutation.mutate({ id: invoiceId, status: newStatus });
   };
 
+  const generatePDF = (invoice: Invoice) => {
+    // Simple PDF generation using browser print
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>Invoice ${invoice.id}</title>
+            <style>
+              body { font-family: Arial, sans-serif; margin: 40px; }
+              .header { text-align: center; margin-bottom: 40px; }
+              .invoice-details { margin-bottom: 30px; }
+              .table { width: 100%; border-collapse: collapse; }
+              .table th, .table td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+              .total { font-weight: bold; font-size: 18px; }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <h1>INVOICE</h1>
+              <h2>${invoice.id}</h2>
+            </div>
+            <div class="invoice-details">
+              <p><strong>Client:</strong> ${invoice.clients.name}</p>
+              <p><strong>Project:</strong> ${invoice.projects.name}</p>
+              <p><strong>Date:</strong> ${invoice.date}</p>
+              <p><strong>Due Date:</strong> ${invoice.due_date}</p>
+            </div>
+            <table class="table">
+              <tr>
+                <th>Description</th>
+                <th>Hours</th>
+                <th>Rate</th>
+                <th>Amount</th>
+              </tr>
+              <tr>
+                <td>${invoice.projects.name} - Work completed</td>
+                <td>${invoice.hours}</td>
+                <td>₹${invoice.rate}</td>
+                <td>₹${invoice.amount.toFixed(2)}</td>
+              </tr>
+              <tr class="total">
+                <td colspan="3">Total</td>
+                <td>₹${invoice.amount.toFixed(2)}</td>
+              </tr>
+            </table>
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+      printWindow.print();
+    }
+  };
+
   const totalRevenue = invoices.filter(inv => inv.status === 'Paid').reduce((sum, inv) => sum + inv.amount, 0);
   const pendingRevenue = invoices.filter(inv => inv.status === 'Sent').reduce((sum, inv) => sum + inv.amount, 0);
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
-        <div className="text-lg">Loading invoices...</div>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+        <Navigation />
+        <div className="flex items-center justify-center py-8">
+          <div className="text-lg">Loading invoices...</div>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+      <Navigation />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex justify-between items-center mb-8">
           <div>
@@ -445,12 +533,24 @@ const Invoices = () => {
                     <p className="text-2xl font-bold text-gray-900 mb-4">
                       ₹{invoice.amount.toFixed(2)}
                     </p>
-                    <div className="flex space-x-2">
-                      <Button variant="outline" size="sm">
-                        <Eye className="h-4 w-4 mr-1" />
-                        View
+                    <div className="flex space-x-2 mb-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setExpandedInvoice(expandedInvoice === invoice.id ? null : invoice.id)}
+                      >
+                        {expandedInvoice === invoice.id ? (
+                          <ChevronUp className="h-4 w-4 mr-1" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4 mr-1" />
+                        )}
+                        Tasks
                       </Button>
-                      <Button variant="outline" size="sm">
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => generatePDF(invoice)}
+                      >
                         <Download className="h-4 w-4 mr-1" />
                         PDF
                       </Button>
@@ -476,6 +576,28 @@ const Invoices = () => {
                     </div>
                   </div>
                 </div>
+                
+                {expandedInvoice === invoice.id && (
+                  <div className="mt-4 pt-4 border-t">
+                    <h4 className="font-medium mb-3">Tasks in this invoice:</h4>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Task Name</TableHead>
+                          <TableHead>Hours</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {invoiceTasks.map((invoiceTask, index) => (
+                          <TableRow key={index}>
+                            <TableCell>{invoiceTask.tasks.name}</TableCell>
+                            <TableCell>{invoiceTask.tasks.hours}h</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
               </CardContent>
             </Card>
           ))}

@@ -7,10 +7,13 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Clock, Play, Pause, Square } from 'lucide-react';
+import { Plus, Clock, Play, Square, Filter, MessageSquare } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import Navigation from '@/components/Navigation';
+import TaskCommentDialog from '@/components/TaskCommentDialog';
+import TaskHistory from '@/components/TaskHistory';
 
 interface Task {
   id: string;
@@ -18,6 +21,7 @@ interface Task {
   hours: number;
   status: string;
   date: string;
+  invoiced: boolean;
   projects: {
     name: string;
     clients: {
@@ -34,6 +38,11 @@ interface Project {
   };
 }
 
+interface Client {
+  id: string;
+  name: string;
+}
+
 const Tasks = () => {
   const queryClient = useQueryClient();
   const [newTask, setNewTask] = useState({
@@ -42,14 +51,21 @@ const Tasks = () => {
     hours: ''
   });
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [activeTimer, setActiveTimer] = useState<string | null>(null);
-  const [timerSeconds, setTimerSeconds] = useState(0);
+  const [commentDialogOpen, setCommentDialogOpen] = useState(false);
+  const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
+  const [expandedTask, setExpandedTask] = useState<string | null>(null);
+  const [filters, setFilters] = useState({
+    client_id: '',
+    project_id: '',
+    status: '',
+    billing_status: ''
+  });
 
   // Fetch tasks with project and client data
   const { data: tasks = [], isLoading } = useQuery({
-    queryKey: ['tasks'],
+    queryKey: ['tasks', filters],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('tasks')
         .select(`
           *,
@@ -59,9 +75,31 @@ const Tasks = () => {
           )
         `)
         .order('created_at', { ascending: false });
-      
+
+      if (filters.project_id) {
+        query = query.eq('project_id', filters.project_id);
+      }
+      if (filters.status) {
+        query = query.eq('status', filters.status);
+      }
+      if (filters.billing_status === 'billed') {
+        query = query.eq('invoiced', true);
+      } else if (filters.billing_status === 'unbilled') {
+        query = query.eq('invoiced', false);
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
-      return data as Task[];
+      
+      // Filter by client if needed
+      let filteredData = data as Task[];
+      if (filters.client_id) {
+        filteredData = filteredData.filter(task => 
+          task.projects.clients.name === filters.client_id
+        );
+      }
+      
+      return filteredData;
     }
   });
 
@@ -79,6 +117,20 @@ const Tasks = () => {
       
       if (error) throw error;
       return data as Project[];
+    }
+  });
+
+  // Fetch clients for filters
+  const { data: clients = [] } = useQuery({
+    queryKey: ['clients-for-filters'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('clients')
+        .select('id, name')
+        .order('name');
+      
+      if (error) throw error;
+      return data as Client[];
     }
   });
 
@@ -147,40 +199,25 @@ const Tasks = () => {
   };
 
   const startTimer = (taskId: string) => {
-    setActiveTimer(taskId);
-    setTimerSeconds(0);
-    
-    const interval = setInterval(() => {
-      setTimerSeconds(prev => prev + 1);
-    }, 1000);
-
-    (window as any).timerInterval = interval;
+    setActiveTaskId(taskId);
+    setCommentDialogOpen(true);
   };
 
-  const stopTimer = (taskId: string) => {
-    if ((window as any).timerInterval) {
-      clearInterval((window as any).timerInterval);
+  const handleTimeLogged = (hours: number) => {
+    if (activeTaskId) {
+      const task = tasks.find(t => t.id === activeTaskId);
+      if (task) {
+        updateTaskMutation.mutate({
+          id: activeTaskId,
+          hours: task.hours + hours
+        });
+      }
     }
-    
-    const hours = timerSeconds / 3600;
-    const task = tasks.find(t => t.id === taskId);
-    if (task) {
-      updateTaskMutation.mutate({
-        id: taskId,
-        hours: task.hours + hours
-      });
-    }
-    
-    setActiveTimer(null);
-    setTimerSeconds(0);
-    toast.success(`Logged ${hours.toFixed(2)} hours for task`);
+    setActiveTaskId(null);
   };
 
-  const formatTime = (seconds: number) => {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  const clearFilters = () => {
+    setFilters({ client_id: '', project_id: '', status: '', billing_status: '' });
   };
 
   const getStatusColor = (status: string) => {
@@ -196,16 +233,26 @@ const Tasks = () => {
     }
   };
 
+  const getBillingStatusColor = (invoiced: boolean) => {
+    return invoiced 
+      ? 'bg-blue-100 text-blue-800' 
+      : 'bg-orange-100 text-orange-800';
+  };
+
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
-        <div className="text-lg">Loading tasks...</div>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+        <Navigation />
+        <div className="flex items-center justify-center py-8">
+          <div className="text-lg">Loading tasks...</div>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+      <Navigation />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex justify-between items-center mb-8">
           <div>
@@ -275,6 +322,82 @@ const Tasks = () => {
           </Dialog>
         </div>
 
+        {/* Filters */}
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <Filter className="h-5 w-5 mr-2" />
+              Filters
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+              <div className="space-y-2">
+                <Label>Client</Label>
+                <Select value={filters.client_id} onValueChange={(value) => setFilters({...filters, client_id: value})}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All clients" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All clients</SelectItem>
+                    {clients.map((client) => (
+                      <SelectItem key={client.id} value={client.name}>
+                        {client.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Project</Label>
+                <Select value={filters.project_id} onValueChange={(value) => setFilters({...filters, project_id: value})}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All projects" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All projects</SelectItem>
+                    {projects.map((project) => (
+                      <SelectItem key={project.id} value={project.id}>
+                        {project.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Status</Label>
+                <Select value={filters.status} onValueChange={(value) => setFilters({...filters, status: value})}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All statuses" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All statuses</SelectItem>
+                    <SelectItem value="Not Started">Not Started</SelectItem>
+                    <SelectItem value="In Progress">In Progress</SelectItem>
+                    <SelectItem value="Completed">Completed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Billing Status</Label>
+                <Select value={filters.billing_status} onValueChange={(value) => setFilters({...filters, billing_status: value})}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All</SelectItem>
+                    <SelectItem value="billed">Billed</SelectItem>
+                    <SelectItem value="unbilled">Unbilled</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button variant="outline" onClick={clearFilters}>
+                Clear Filters
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
         <div className="space-y-6">
           {tasks.map((task) => (
             <Card key={task.id} className="hover:shadow-lg transition-shadow duration-200">
@@ -286,54 +409,65 @@ const Tasks = () => {
                       {task.projects.name} • {task.projects.clients.name}
                     </CardDescription>
                   </div>
-                  <Badge className={getStatusColor(task.status)}>
-                    {task.status}
-                  </Badge>
+                  <div className="flex space-x-2">
+                    <Badge className={getStatusColor(task.status)}>
+                      {task.status}
+                    </Badge>
+                    <Badge className={getBillingStatusColor(task.invoiced)}>
+                      {task.invoiced ? 'Billed' : 'Unbilled'}
+                    </Badge>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center space-x-6">
                     <div className="flex items-center space-x-2">
                       <Clock className="h-4 w-4 text-blue-600" />
-                      <span className="font-medium">
-                        {activeTimer === task.id 
-                          ? formatTime(timerSeconds)
-                          : `${task.hours.toFixed(2)}h`
-                        }
-                      </span>
+                      <span className="font-medium">{task.hours.toFixed(2)}h</span>
                     </div>
                     <span className="text-sm text-gray-600">{task.date}</span>
                   </div>
                   
                   <div className="flex space-x-2">
-                    {activeTimer === task.id ? (
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => stopTimer(task.id)}
-                        className="text-red-600 hover:text-red-700"
-                      >
-                        <Square className="h-4 w-4 mr-1" />
-                        Stop
-                      </Button>
-                    ) : (
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => startTimer(task.id)}
-                        disabled={activeTimer !== null}
-                      >
-                        <Play className="h-4 w-4 mr-1" />
-                        Start
-                      </Button>
-                    )}
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => startTimer(task.id)}
+                    >
+                      <Play className="h-4 w-4 mr-1" />
+                      Log Time
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setExpandedTask(expandedTask === task.id ? null : task.id)}
+                    >
+                      <MessageSquare className="h-4 w-4 mr-1" />
+                      History
+                    </Button>
                   </div>
                 </div>
+                
+                {expandedTask === task.id && (
+                  <div className="pt-4 border-t">
+                    <TaskHistory taskId={task.id} />
+                  </div>
+                )}
               </CardContent>
             </Card>
           ))}
         </div>
+
+        <TaskCommentDialog
+          isOpen={commentDialogOpen}
+          onClose={() => {
+            setCommentDialogOpen(false);
+            setActiveTaskId(null);
+          }}
+          taskId={activeTaskId || ''}
+          onTimeLogged={handleTimeLogged}
+        />
       </div>
     </div>
   );

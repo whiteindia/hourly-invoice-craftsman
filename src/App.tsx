@@ -12,6 +12,8 @@ import Clients from "./pages/Clients";
 import Projects from "./pages/Projects";
 import Tasks from "./pages/Tasks";
 import Invoices from "./pages/Invoices";
+import Payments from "./pages/Payments";
+import Services from "./pages/Services";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -48,6 +50,16 @@ const App = () => (
             <Route path="/invoices" element={
               <ProtectedRoute>
                 <Invoices />
+              </ProtectedRoute>
+            } />
+            <Route path="/payments" element={
+              <ProtectedRoute>
+                <Payments />
+              </ProtectedRoute>
+            } />
+            <Route path="/services" element={
+              <ProtectedRoute>
+                <Services />
               </ProtectedRoute>
             } />
             <Route path="*" element={<NotFound />} />
