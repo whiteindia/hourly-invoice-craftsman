@@ -50,7 +50,7 @@ const Projects = () => {
   const [filters, setFilters] = useState({
     year: new Date().getFullYear().toString(),
     client_id: '',
-    status: ''
+    status: '' as ProjectStatus | ''
   });
 
   const projectTypes: { value: ProjectType; rate: number }[] = [
@@ -74,8 +74,11 @@ const Projects = () => {
         .select(`
           *,
           clients(name)
-        `)
-        .in('status', ['Active', 'Completed']);
+        `);
+
+      // Only show Active and Completed projects by default
+      const statusFilter: ProjectStatus[] = ['Active', 'Completed'];
+      query = query.in('status', statusFilter);
 
       // Filter by year
       if (filters.year) {
@@ -394,7 +397,7 @@ const Projects = () => {
               </div>
               <div className="space-y-2">
                 <Label>Status</Label>
-                <Select value={filters.status} onValueChange={(value) => setFilters({...filters, status: value})}>
+                <Select value={filters.status} onValueChange={(value) => setFilters({...filters, status: value as ProjectStatus | ''})}>
                   <SelectTrigger>
                     <SelectValue placeholder="All statuses" />
                   </SelectTrigger>
