@@ -102,8 +102,7 @@ const Tasks = () => {
           ),
           assignee:employees!tasks_assignee_id_fkey(name),
           assigner:employees!tasks_assigner_id_fkey(name)
-        `)
-        .order('date', { ascending: false });
+        `);
 
       // Apply role-based filtering
       if (roleString === 'employee' || roleString === 'associate') {
@@ -129,7 +128,26 @@ const Tasks = () => {
 
       const { data, error } = await query;
       if (error) throw error;
-      return data as Task[];
+      
+      // Sort tasks with overdue and duration-exceeded tasks at the top
+      const sortedTasks = (data as Task[]).sort((a, b) => {
+        const aIsOverdue = isOverdue(a);
+        const bIsOverdue = isOverdue(b);
+        const aIsDurationExceeded = isDurationExceeded(a);
+        const bIsDurationExceeded = isDurationExceeded(b);
+        
+        // Priority sorting: overdue or duration exceeded tasks go first
+        const aPriority = aIsOverdue || aIsDurationExceeded;
+        const bPriority = bIsOverdue || bIsDurationExceeded;
+        
+        if (aPriority && !bPriority) return -1;
+        if (!aPriority && bPriority) return 1;
+        
+        // If both or neither are priority, sort by date (newest first)
+        return new Date(b.date).getTime() - new Date(a.date).getTime();
+      });
+      
+      return sortedTasks;
     },
     enabled: !!currentEmployee
   });
@@ -742,7 +760,7 @@ const Tasks = () => {
               <TableBody>
                 {tasks.map((task) => (
                   <React.Fragment key={task.id}>
-                    <TableRow className={isOverdue(task) ? 'bg-red-50' : ''}>
+                    <TableRow className={isOverdue(task) || isDurationExceeded(task) ? 'bg-red-50' : ''}>
                       <TableCell>
                         <Button
                           variant="ghost"
