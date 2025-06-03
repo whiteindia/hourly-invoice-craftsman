@@ -18,6 +18,7 @@ import Wages from "./pages/Wages";
 import NotFound from "./pages/NotFound";
 import Roles from "./pages/Roles";
 import Invitations from "./pages/Invitations";
+import Sprints from "./pages/Sprints";
 
 const queryClient = new QueryClient();
 
@@ -67,6 +68,14 @@ function App() {
                 element={
                   <ProtectedRoute pageName="tasks">
                     <Tasks />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/sprints"
+                element={
+                  <ProtectedRoute pageName="sprints">
+                    <Sprints />
                   </ProtectedRoute>
                 }
               />

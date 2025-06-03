@@ -481,6 +481,69 @@ export type Database = {
         }
         Relationships: []
       }
+      sprint_tasks: {
+        Row: {
+          created_at: string
+          id: string
+          sprint_id: string
+          task_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          sprint_id: string
+          task_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          sprint_id?: string
+          task_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sprint_tasks_sprint_id_fkey"
+            columns: ["sprint_id"]
+            isOneToOne: false
+            referencedRelation: "sprints"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sprint_tasks_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sprints: {
+        Row: {
+          created_at: string
+          deadline: string
+          id: string
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          deadline: string
+          id?: string
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          deadline?: string
+          id?: string
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       task_comments: {
         Row: {
           comment: string
