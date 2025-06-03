@@ -70,6 +70,30 @@ const Index = () => {
     }
   });
 
+  // Get recent projects for dashboard display
+  const { data: recentProjects = [] } = useQuery({
+    queryKey: ['recent-projects'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('projects')
+        .select(`
+          id,
+          name,
+          type,
+          hourly_rate,
+          total_hours,
+          status,
+          clients (name)
+        `)
+        .eq('status', 'Active')
+        .order('created_at', { ascending: false })
+        .limit(3);
+      
+      if (error) throw error;
+      return data || [];
+    }
+  });
+
   const formatElapsedTime = (startTime: string) => {
     const start = new Date(startTime);
     const now = new Date();
@@ -84,6 +108,12 @@ const Index = () => {
 
   const handleRunningTaskClick = () => {
     navigate('/tasks?status=In Progress');
+  };
+
+  const handleBRDClick = (projectId: string) => {
+    // For now, we'll show a placeholder since BRD storage isn't implemented yet
+    // In a real implementation, this would open the actual BRD document
+    window.open(`/brd-placeholder/${projectId}`, '_blank');
   };
 
   return (
@@ -191,49 +221,111 @@ const Index = () => {
             </CardContent>
           </Card>
 
-          {/* Quick Actions */}
+          {/* Recent Projects */}
           <Card>
             <CardHeader>
-              <CardTitle>Quick Actions</CardTitle>
+              <CardTitle className="flex items-center">
+                <FolderOpen className="h-5 w-5 mr-2 text-blue-600" />
+                Recent Active Projects
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                <Button 
-                  className="w-full justify-start" 
-                  variant="outline"
-                  onClick={() => navigate('/tasks')}
-                >
-                  <CheckSquare className="h-4 w-4 mr-2" />
-                  View All Tasks
-                </Button>
-                <Button 
-                  className="w-full justify-start" 
-                  variant="outline"
-                  onClick={() => navigate('/projects')}
-                >
-                  <FolderOpen className="h-4 w-4 mr-2" />
-                  Manage Projects
-                </Button>
-                <Button 
-                  className="w-full justify-start" 
-                  variant="outline"
-                  onClick={() => navigate('/employees')}
-                >
-                  <Users className="h-4 w-4 mr-2" />
-                  Team Management
-                </Button>
-                <Button 
-                  className="w-full justify-start" 
-                  variant="outline"
-                  onClick={() => navigate('/invoices')}
-                >
-                  <FileText className="h-4 w-4 mr-2" />
-                  Create Invoice
-                </Button>
-              </div>
+              {recentProjects.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <FolderOpen className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                  <p>No active projects</p>
+                  <p className="text-sm">Create a new project to get started</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {recentProjects.map((project: any) => (
+                    <div
+                      key={project.id}
+                      className="p-4 border rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="font-medium text-gray-900">{project.name}</h4>
+                        <Badge variant="outline">{project.type}</Badge>
+                      </div>
+                      <p className="text-sm text-gray-600 mb-3">{project.clients.name}</p>
+                      
+                      <div className="flex items-center justify-between">
+                        {project.type === 'BRD' ? (
+                          <div 
+                            className="flex items-center space-x-2 cursor-pointer text-blue-600 hover:text-blue-800"
+                            onClick={() => handleBRDClick(project.id)}
+                          >
+                            <FileText className="h-4 w-4" />
+                            <span className="text-sm font-medium">View BRD Document</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center space-x-1">
+                            <DollarSign className="h-4 w-4 text-green-600" />
+                            <span className="text-sm font-medium">₹{project.hourly_rate}/hr</span>
+                          </div>
+                        )}
+                        <div className="flex items-center space-x-1">
+                          <Clock className="h-4 w-4 text-blue-600" />
+                          <span className="text-sm">{project.total_hours}h</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => navigate('/projects')}
+                  >
+                    View All Projects
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
+
+        {/* Quick Actions */}
+        <Card className="mt-8">
+          <CardHeader>
+            <CardTitle>Quick Actions</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <Button 
+                className="justify-start" 
+                variant="outline"
+                onClick={() => navigate('/tasks')}
+              >
+                <CheckSquare className="h-4 w-4 mr-2" />
+                View All Tasks
+              </Button>
+              <Button 
+                className="justify-start" 
+                variant="outline"
+                onClick={() => navigate('/projects')}
+              >
+                <FolderOpen className="h-4 w-4 mr-2" />
+                Manage Projects
+              </Button>
+              <Button 
+                className="justify-start" 
+                variant="outline"
+                onClick={() => navigate('/employees')}
+              >
+                <Users className="h-4 w-4 mr-2" />
+                Team Management
+              </Button>
+              <Button 
+                className="justify-start" 
+                variant="outline"
+                onClick={() => navigate('/invoices')}
+              >
+                <FileText className="h-4 w-4 mr-2" />
+                Create Invoice
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
