@@ -131,32 +131,45 @@ const Projects = () => {
     queryKey: ['assignees'],
     queryFn: async () => {
       console.log('Fetching assignees...');
-      const { data, error } = await supabase
-        .from('user_roles')
-        .select(`
-          user_id,
-          role,
-          profiles!inner (
-            id,
-            full_name,
-            email
-          )
-        `)
-        .in('role', ['admin', 'manager'])
-        .order('profiles.full_name');
       
-      if (error) {
-        console.error('Error fetching assignees:', error);
-        throw error;
+      // First get user roles for admin and manager
+      const { data: userRoles, error: rolesError } = await supabase
+        .from('user_roles')
+        .select('user_id')
+        .in('role', ['admin', 'manager']);
+      
+      if (rolesError) {
+        console.error('Error fetching user roles:', rolesError);
+        throw rolesError;
       }
       
-      console.log('Raw assignees data:', data);
+      if (!userRoles || userRoles.length === 0) {
+        console.log('No admin or manager users found');
+        return [];
+      }
+      
+      // Extract user IDs
+      const userIds = userRoles.map(role => role.user_id);
+      
+      // Now get profiles for these users
+      const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, full_name, email')
+        .in('id', userIds)
+        .order('full_name');
+      
+      if (profilesError) {
+        console.error('Error fetching profiles:', profilesError);
+        throw profilesError;
+      }
+      
+      console.log('Raw assignees data:', profiles);
       
       // Transform the data to match expected format
-      const transformedData = data?.map(item => ({
-        id: item.profiles.id,
-        full_name: item.profiles.full_name || item.profiles.email,
-        email: item.profiles.email
+      const transformedData = profiles?.map(profile => ({
+        id: profile.id,
+        full_name: profile.full_name || profile.email,
+        email: profile.email
       })) || [];
       
       console.log('Transformed assignees data:', transformedData);
