@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -79,9 +78,9 @@ interface Project {
   name: string;
 }
 
-interface ProjectService {
+interface EmployeeService {
   id: string;
-  project_id: string;
+  employee_id: string;
   service_id: string;
 }
 
@@ -179,16 +178,16 @@ const Tasks = () => {
     }
   });
 
-  // Fetch project services separately
-  const { data: projectServices = [] } = useQuery({
-    queryKey: ['project-services'],
+  // Fetch employee services separately
+  const { data: employeeServices = [] } = useQuery({
+    queryKey: ['employee-services'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('employee_services')
         .select('*');
       
       if (error) throw error;
-      return data as ProjectService[];
+      return data as EmployeeService[];
     }
   });
 
@@ -352,9 +351,9 @@ const Tasks = () => {
       const matchesAssigner = assignerFilter === 'all' || task.assigner_id === assignerFilter;
       const matchesSearch = task.name.toLowerCase().includes(searchTerm.toLowerCase());
       
-      // Filter by service through project services
+      // Filter by service through employee services (check if the assignee has the service)
       const matchesService = globalServiceFilter === 'all' || 
-        projectServices.some(ps => ps.project_id === task.project_id && ps.service_id === globalServiceFilter);
+        employeeServices.some(es => es.employee_id === task.assignee_id && es.service_id === globalServiceFilter);
       
       return matchesProject && matchesStatus && matchesAssignee && matchesAssigner && matchesSearch && matchesService;
     });
@@ -388,7 +387,7 @@ const Tasks = () => {
       // Default sort by creation date
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     });
-  }, [tasks, selectedProject, statusFilter, assigneeFilter, assignerFilter, searchTerm, globalServiceFilter, projectServices]);
+  }, [tasks, selectedProject, statusFilter, assigneeFilter, assignerFilter, searchTerm, globalServiceFilter, employeeServices]);
 
   const handleCreateTask = () => {
     createTaskMutation.mutate(newTask);
