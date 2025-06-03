@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Edit, Trash2, Eye, Filter } from 'lucide-react';
+import { Plus, Edit, Trash2, Eye, Filter, Upload, FileText, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -24,7 +24,11 @@ interface Project {
   client_id: string;
   type: ProjectType;
   hourly_rate: number;
+  project_amount: number | null;
+  total_hours: number;
   status: ProjectStatus;
+  deadline: string | null;
+  brd_file_url: string | null;
   created_at: string;
   clients?: {
     name: string;
@@ -48,12 +52,18 @@ const Projects = () => {
     client_id: '',
     type: 'DevOps' as ProjectType,
     hourly_rate: 0,
-    status: 'Active' as ProjectStatus
+    project_amount: 0,
+    total_hours: 0,
+    status: 'Active' as ProjectStatus,
+    deadline: '',
+    brd_file_url: ''
   });
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [globalServiceFilter, setGlobalServiceFilter] = useState<string>('all');
+  const [uploadingBRD, setUploadingBRD] = useState(false);
+  const [editUploadingBRD, setEditUploadingBRD] = useState(false);
 
   // Fetch projects with client data
   const { data: projects = [], isLoading } = useQuery({
@@ -100,6 +110,81 @@ const Projects = () => {
     }
   });
 
+  // Handle BRD file upload for new project
+  const handleBRDUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (file.type !== 'application/pdf') {
+      toast.error('Please upload a PDF file');
+      return;
+    }
+
+    setUploadingBRD(true);
+    try {
+      const fileExt = 'pdf';
+      const fileName = `brd-${Date.now()}.${fileExt}`;
+      
+      const { data, error } = await supabase.storage
+        .from('project-files')
+        .upload(fileName, file);
+
+      if (error) throw error;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('project-files')
+        .getPublicUrl(fileName);
+
+      setNewProject({ ...newProject, brd_file_url: publicUrl });
+      toast.success('BRD file uploaded successfully');
+    } catch (error: any) {
+      toast.error('Failed to upload BRD file: ' + error.message);
+    } finally {
+      setUploadingBRD(false);
+    }
+  };
+
+  // Handle BRD file upload for edit project
+  const handleEditBRDUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !editingProject) return;
+
+    if (file.type !== 'application/pdf') {
+      toast.error('Please upload a PDF file');
+      return;
+    }
+
+    setEditUploadingBRD(true);
+    try {
+      const fileExt = 'pdf';
+      const fileName = `brd-${Date.now()}.${fileExt}`;
+      
+      const { data, error } = await supabase.storage
+        .from('project-files')
+        .upload(fileName, file);
+
+      if (error) throw error;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('project-files')
+        .getPublicUrl(fileName);
+
+      setEditingProject({ ...editingProject, brd_file_url: publicUrl });
+      toast.success('BRD file uploaded successfully');
+    } catch (error: any) {
+      toast.error('Failed to upload BRD file: ' + error.message);
+    } finally {
+      setEditUploadingBRD(false);
+    }
+  };
+
+  // View BRD file
+  const viewBRD = (url: string) => {
+    if (url) {
+      window.open(url, '_blank');
+    }
+  };
+
   // Create project mutation
   const createProjectMutation = useMutation({
     mutationFn: async (projectData: any) => {
@@ -131,7 +216,11 @@ const Projects = () => {
         client_id: '',
         type: 'DevOps',
         hourly_rate: 0,
-        status: 'Active'
+        project_amount: 0,
+        total_hours: 0,
+        status: 'Active',
+        deadline: '',
+        brd_file_url: ''
       });
       toast.success('Project created successfully!');
     },
@@ -207,6 +296,11 @@ const Projects = () => {
       toast.error('Failed to delete project: ' + error.message);
     }
   });
+
+  // Determine if project is hourly or project-based
+  const isProjectBased = (type: ProjectType) => {
+    return type === 'BRD';
+  };
 
   // Filter projects based on global service filter
   const filteredProjects = projects.filter(project => {
@@ -311,93 +405,156 @@ const Projects = () => {
               </Select>
             </div>
 
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-              <DialogTrigger asChild>
-                <Button className="bg-blue-600 hover:bg-blue-700">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Project
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-2xl">
-                <DialogHeader>
-                  <DialogTitle>Create New Project</DialogTitle>
-                  <DialogDescription>
-                    Add a new project to track your work.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4">
+        {/* Add Project Dialog */}
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogTrigger asChild>
+            <Button className="bg-blue-600 hover:bg-blue-700">
+              <Plus className="h-4 w-4 mr-2" />
+              Add Project
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Create New Project</DialogTitle>
+              <DialogDescription>
+                Add a new project to track your work.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Project Name</Label>
+                <Input
+                  id="name"
+                  placeholder="Project name"
+                  value={newProject.name}
+                  onChange={(e) => setNewProject({ ...newProject, name: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="client">Client</Label>
+                <Select value={newProject.client_id} onValueChange={(value) => setNewProject({ ...newProject, client_id: value })}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a client" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {clients.map((client) => (
+                      <SelectItem key={client.id} value={client.id}>
+                        {client.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="type">Project Type</Label>
+                <Select value={newProject.type} onValueChange={(value) => setNewProject({ ...newProject, type: value as ProjectType })}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="DevOps">DevOps</SelectItem>
+                    <SelectItem value="Marketing">Marketing</SelectItem>
+                    <SelectItem value="Consulting">Consulting</SelectItem>
+                    <SelectItem value="Strategy">Strategy</SelectItem>
+                    <SelectItem value="Technical Writing">Technical Writing</SelectItem>
+                    <SelectItem value="BRD">BRD (Project-based)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Conditional fields based on project type */}
+              {isProjectBased(newProject.type) ? (
+                <>
                   <div className="space-y-2">
-                    <Label htmlFor="name">Project Name</Label>
+                    <Label htmlFor="project_amount">Project Amount</Label>
                     <Input
-                      id="name"
-                      placeholder="Project name"
-                      value={newProject.name}
-                      onChange={(e) => setNewProject({ ...newProject, name: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="client">Client</Label>
-                    <Select value={newProject.client_id} onValueChange={(value) => setNewProject({ ...newProject, client_id: value })}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a client" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {clients.map((client) => (
-                          <SelectItem key={client.id} value={client.id}>
-                            {client.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="type">Project Type</Label>
-                    <Select value={newProject.type} onValueChange={(value) => setNewProject({ ...newProject, type: value as ProjectType })}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="DevOps">DevOps</SelectItem>
-                        <SelectItem value="Marketing">Marketing</SelectItem>
-                        <SelectItem value="Consulting">Consulting</SelectItem>
-                        <SelectItem value="Strategy">Strategy</SelectItem>
-                        <SelectItem value="Technical Writing">Technical Writing</SelectItem>
-                        <SelectItem value="BRD">BRD</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="hourly_rate">Hourly Rate</Label>
-                    <Input
-                      id="hourly_rate"
+                      id="project_amount"
                       type="number"
-                      placeholder="Hourly rate"
-                      value={newProject.hourly_rate.toString()}
-                      onChange={(e) => setNewProject({ ...newProject, hourly_rate: parseFloat(e.target.value) })}
+                      placeholder="Total project amount"
+                      value={newProject.project_amount.toString()}
+                      onChange={(e) => setNewProject({ ...newProject, project_amount: parseFloat(e.target.value) || 0 })}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="status">Status</Label>
-                    <Select value={newProject.status} onValueChange={(value) => setNewProject({ ...newProject, status: value as ProjectStatus })}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a status" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Active">Active</SelectItem>
-                        <SelectItem value="Inactive">Inactive</SelectItem>
-                        <SelectItem value="On Hold">On Hold</SelectItem>
-                        <SelectItem value="Completed">Completed</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <Label htmlFor="total_hours">Estimated Total Hours</Label>
+                    <Input
+                      id="total_hours"
+                      type="number"
+                      placeholder="Estimated hours for completion"
+                      value={newProject.total_hours.toString()}
+                      onChange={(e) => setNewProject({ ...newProject, total_hours: parseFloat(e.target.value) || 0 })}
+                    />
                   </div>
-                  <Button onClick={handleCreateProject} className="w-full" disabled={createProjectMutation.isPending}>
-                    {createProjectMutation.isPending ? 'Creating...' : 'Create Project'}
-                  </Button>
+                  <div className="space-y-2">
+                    <Label htmlFor="deadline">Project Deadline</Label>
+                    <Input
+                      id="deadline"
+                      type="date"
+                      value={newProject.deadline}
+                      onChange={(e) => setNewProject({ ...newProject, deadline: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="brd_file">BRD Document (PDF)</Label>
+                    <div className="flex items-center space-x-2">
+                      <Input
+                        id="brd_file"
+                        type="file"
+                        accept=".pdf"
+                        onChange={handleBRDUpload}
+                        disabled={uploadingBRD}
+                      />
+                      {uploadingBRD && <div className="text-sm text-gray-500">Uploading...</div>}
+                    </div>
+                    {newProject.brd_file_url && (
+                      <div className="flex items-center space-x-2 mt-2">
+                        <FileText className="h-4 w-4 text-green-600" />
+                        <span className="text-sm text-green-600">BRD uploaded successfully</span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => viewBRD(newProject.brd_file_url)}
+                        >
+                          <Eye className="h-4 w-4 mr-1" />
+                          View
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="space-y-2">
+                  <Label htmlFor="hourly_rate">Hourly Rate</Label>
+                  <Input
+                    id="hourly_rate"
+                    type="number"
+                    placeholder="Hourly rate"
+                    value={newProject.hourly_rate.toString()}
+                    onChange={(e) => setNewProject({ ...newProject, hourly_rate: parseFloat(e.target.value) || 0 })}
+                  />
                 </div>
-              </DialogContent>
-            </Dialog>
-          </div>
-        </div>
+              )}
+
+              <div className="space-y-2">
+                <Label htmlFor="status">Status</Label>
+                <Select value={newProject.status} onValueChange={(value) => setNewProject({ ...newProject, status: value as ProjectStatus })}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Active">Active</SelectItem>
+                    <SelectItem value="Inactive">Inactive</SelectItem>
+                    <SelectItem value="On Hold">On Hold</SelectItem>
+                    <SelectItem value="Completed">Completed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button onClick={handleCreateProject} className="w-full" disabled={createProjectMutation.isPending}>
+                {createProjectMutation.isPending ? 'Creating...' : 'Create Project'}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* Projects Table */}
         <Card>
@@ -415,8 +572,10 @@ const Projects = () => {
                   <TableHead>Name</TableHead>
                   <TableHead>Client</TableHead>
                   <TableHead>Type</TableHead>
-                  <TableHead>Rate</TableHead>
+                  <TableHead>Rate/Amount</TableHead>
+                  <TableHead>Deadline</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>BRD</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -425,12 +584,49 @@ const Projects = () => {
                   <TableRow key={project.id}>
                     <TableCell className="font-medium">{project.name}</TableCell>
                     <TableCell>{project.clients?.name}</TableCell>
-                    <TableCell>{project.type}</TableCell>
-                    <TableCell>₹{project.hourly_rate}/hr</TableCell>
+                    <TableCell>
+                      <Badge variant="outline">
+                        {project.type} {isProjectBased(project.type) && '(Project-based)'}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {isProjectBased(project.type) ? (
+                        <div>
+                          <div className="font-medium">₹{project.project_amount || 0}</div>
+                          <div className="text-sm text-gray-500">{project.total_hours}h estimated</div>
+                        </div>
+                      ) : (
+                        <div>₹{project.hourly_rate}/hr</div>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {project.deadline ? (
+                        <div className="text-sm">
+                          {new Date(project.deadline).toLocaleDateString()}
+                        </div>
+                      ) : (
+                        <span className="text-gray-400">No deadline</span>
+                      )}
+                    </TableCell>
                     <TableCell>
                       <Badge className={getStatusColor(project.status)}>
                         {project.status}
                       </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {project.brd_file_url ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => viewBRD(project.brd_file_url!)}
+                          className="text-blue-600 hover:text-blue-800"
+                        >
+                          <FileText className="h-4 w-4 mr-1" />
+                          View BRD
+                        </Button>
+                      ) : (
+                        <span className="text-gray-400 text-sm">No BRD</span>
+                      )}
                     </TableCell>
                     <TableCell>
                       <div className="flex space-x-2">
@@ -511,16 +707,80 @@ const Projects = () => {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="hourly_rate">Hourly Rate</Label>
-                <Input
-                  id="hourly_rate"
-                  type="number"
-                  placeholder="Hourly rate"
-                  value={editingProject?.hourly_rate?.toString() || ''}
-                  onChange={(e) => setEditingProject({ ...editingProject!, hourly_rate: parseFloat(e.target.value) })}
-                />
-              </div>
+              
+              {/* Conditional fields based on project type */}
+              {editingProject && isProjectBased(editingProject.type) ? (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit_project_amount">Project Amount</Label>
+                    <Input
+                      id="edit_project_amount"
+                      type="number"
+                      placeholder="Total project amount"
+                      value={editingProject?.project_amount?.toString() || ''}
+                      onChange={(e) => setEditingProject({ ...editingProject!, project_amount: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit_total_hours">Estimated Total Hours</Label>
+                    <Input
+                      id="edit_total_hours"
+                      type="number"
+                      placeholder="Estimated hours for completion"
+                      value={editingProject?.total_hours?.toString() || ''}
+                      onChange={(e) => setEditingProject({ ...editingProject!, total_hours: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit_deadline">Project Deadline</Label>
+                    <Input
+                      id="edit_deadline"
+                      type="date"
+                      value={editingProject?.deadline || ''}
+                      onChange={(e) => setEditingProject({ ...editingProject!, deadline: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit_brd_file">BRD Document (PDF)</Label>
+                    <div className="flex items-center space-x-2">
+                      <Input
+                        id="edit_brd_file"
+                        type="file"
+                        accept=".pdf"
+                        onChange={handleEditBRDUpload}
+                        disabled={editUploadingBRD}
+                      />
+                      {editUploadingBRD && <div className="text-sm text-gray-500">Uploading...</div>}
+                    </div>
+                    {editingProject?.brd_file_url && (
+                      <div className="flex items-center space-x-2 mt-2">
+                        <FileText className="h-4 w-4 text-green-600" />
+                        <span className="text-sm text-green-600">BRD uploaded</span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => viewBRD(editingProject.brd_file_url!)}
+                        >
+                          <Eye className="h-4 w-4 mr-1" />
+                          View
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="space-y-2">
+                  <Label htmlFor="edit_hourly_rate">Hourly Rate</Label>
+                  <Input
+                    id="edit_hourly_rate"
+                    type="number"
+                    placeholder="Hourly rate"
+                    value={editingProject?.hourly_rate?.toString() || ''}
+                    onChange={(e) => setEditingProject({ ...editingProject!, hourly_rate: parseFloat(e.target.value) || 0 })}
+                  />
+                </div>
+              )}
+
               <div className="space-y-2">
                 <Label htmlFor="status">Status</Label>
                 <Select value={editingProject?.status || ''} onValueChange={(value) => setEditingProject({ ...editingProject!, status: value as ProjectStatus })}>
