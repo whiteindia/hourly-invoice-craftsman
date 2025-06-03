@@ -19,9 +19,9 @@ interface Payment {
   amount: number;
   payment_date: string;
   payment_method: string | null;
-  clients: { name: string };
-  projects: { name: string };
-  invoices: { id: string };
+  clients: { name: string } | null;
+  projects: { name: string } | null;
+  invoices: { id: string } | null;
 }
 
 interface Client {
@@ -39,8 +39,8 @@ interface Invoice {
   id: string;
   amount: number;
   status: string;
-  clients: { name: string };
-  projects: { name: string };
+  clients: { name: string } | null;
+  projects: { name: string } | null;
   client_id: string;
   project_id: string;
 }
@@ -497,9 +497,15 @@ const Payments = () => {
               <TableBody>
                 {payments.map((payment) => (
                   <TableRow key={payment.id}>
-                    <TableCell className="font-medium">{payment.clients.name}</TableCell>
-                    <TableCell>{payment.invoices.id}</TableCell>
-                    <TableCell>{payment.projects.name}</TableCell>
+                    <TableCell className="font-medium">
+                      {payment.clients?.name || 'Unknown Client'}
+                    </TableCell>
+                    <TableCell>
+                      {payment.invoices?.id || 'N/A'}
+                    </TableCell>
+                    <TableCell>
+                      {payment.projects?.name || 'Unknown Project'}
+                    </TableCell>
                     <TableCell className="font-semibold text-green-600">
                       ₹{payment.amount.toFixed(2)}
                     </TableCell>
