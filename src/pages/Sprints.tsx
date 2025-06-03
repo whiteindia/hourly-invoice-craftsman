@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -54,6 +55,7 @@ const Sprints = () => {
   const [selectedStatus, setSelectedStatus] = useState<string>('active'); // Hide completed by default
   const [selectedYear, setSelectedYear] = useState<string>('all');
   const [selectedMonth, setSelectedMonth] = useState<string>('all');
+  const [globalServiceFilter, setGlobalServiceFilter] = useState<string>('all');
   const queryClient = useQueryClient();
 
   // Fetch clients for filter
@@ -133,6 +135,7 @@ const Sprints = () => {
               hours,
               projects (
                 name,
+                type,
                 clients (
                   name
                 )
@@ -198,6 +201,16 @@ const Sprints = () => {
 
   // Enhanced filter logic
   const filteredSprints = sprints.filter(sprint => {
+    // Global service filter - check project service type
+    if (globalServiceFilter !== 'all') {
+      const hasMatchingService = sprint.tasks.some(task => 
+        task.projects?.type === globalServiceFilter
+      );
+      if (!hasMatchingService && sprint.tasks.length > 0) {
+        return false;
+      }
+    }
+
     // Status filter - by default hide completed sprints
     if (selectedStatus === 'active' && sprint.status === 'Completed') {
       return false;
@@ -242,6 +255,12 @@ const Sprints = () => {
 
       if (selectedAssignee !== 'all') {
         if (task.assignee_id !== selectedAssignee) {
+          return false;
+        }
+      }
+
+      if (selectedService !== 'all') {
+        if (task.projects?.type !== selectedService) {
           return false;
         }
       }
@@ -389,9 +408,10 @@ const Sprints = () => {
     setSelectedStatus('active');
     setSelectedYear('all');
     setSelectedMonth('all');
+    setGlobalServiceFilter('all');
   };
 
-  const hasActiveFilters = selectedClient !== 'all' || selectedProject !== 'all' || selectedAssignee !== 'all' || selectedAssigner !== 'all' || selectedService !== 'all' || selectedStatus !== 'active' || selectedYear !== 'all' || selectedMonth !== 'all';
+  const hasActiveFilters = selectedClient !== 'all' || selectedProject !== 'all' || selectedAssignee !== 'all' || selectedAssigner !== 'all' || selectedService !== 'all' || selectedStatus !== 'active' || selectedYear !== 'all' || selectedMonth !== 'all' || globalServiceFilter !== 'all';
 
   if (isLoading) {
     return (
@@ -410,13 +430,30 @@ const Sprints = () => {
       <div className="container mx-auto p-6">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold">Sprints</h1>
-          <Button onClick={() => {
-            setEditingSprint(null);
-            setDialogOpen(true);
-          }}>
-            <Plus className="h-4 w-4 mr-2" />
-            Create Sprint
-          </Button>
+          <div className="flex items-center gap-4">
+            <div className="w-48">
+              <Select value={globalServiceFilter} onValueChange={setGlobalServiceFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Filter by Service" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Services</SelectItem>
+                  {services.map((service) => (
+                    <SelectItem key={service.id} value={service.name}>
+                      {service.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button onClick={() => {
+              setEditingSprint(null);
+              setDialogOpen(true);
+            }}>
+              <Plus className="h-4 w-4 mr-2" />
+              Create Sprint
+            </Button>
+          </div>
         </div>
 
         <Card className="mb-6">
@@ -557,6 +594,11 @@ const Sprints = () => {
             
             {hasActiveFilters && (
               <div className="mt-4 flex flex-wrap gap-2">
+                {globalServiceFilter !== 'all' && (
+                  <Badge variant="secondary">
+                    Service: {services.find(s => s.name === globalServiceFilter)?.name}
+                  </Badge>
+                )}
                 {selectedStatus !== 'active' && (
                   <Badge variant="secondary">
                     Status: {selectedStatus === 'all' ? 'All' : selectedStatus}
@@ -583,6 +625,11 @@ const Sprints = () => {
                 {selectedAssignee !== 'all' && (
                   <Badge variant="secondary">
                     Assignee: {employees.find(e => e.id === selectedAssignee)?.name}
+                  </Badge>
+                )}
+                {selectedService !== 'all' && (
+                  <Badge variant="secondary">
+                    Task Service: {services.find(s => s.name === selectedService)?.name}
                   </Badge>
                 )}
               </div>
