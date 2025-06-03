@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -13,6 +12,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import Navigation from '@/components/Navigation';
 import EmployeeServicesSelect from '@/components/EmployeeServicesSelect';
+import { useRoles } from '@/hooks/useRoles';
 
 interface Employee {
   id: string;
@@ -45,6 +45,9 @@ const Employees = () => {
     contact_number: '',
     role: 'associate'
   });
+
+  // Fetch dynamic roles
+  const { roles, loading: rolesLoading } = useRoles();
 
   const { data: employees = [], isLoading } = useQuery({
     queryKey: ['employees'],
@@ -240,7 +243,7 @@ const Employees = () => {
   };
 
   const resetForm = () => {
-    setNewEmployee({ name: '', email: '', contact_number: '', role: 'associate' });
+    setNewEmployee({ name: '', email: '', contact_number: '', role: roles[0] || 'associate' });
     setSelectedServices([]);
     setEditingEmployee(null);
   };
@@ -257,7 +260,7 @@ const Employees = () => {
     return serviceNames.join(', ') || 'None';
   };
 
-  if (isLoading) {
+  if (isLoading || rolesLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
         <Navigation />
@@ -331,11 +334,11 @@ const Employees = () => {
                       <SelectValue placeholder="Select role" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="associate">Associate</SelectItem>
-                      <SelectItem value="teamlead">Team Lead</SelectItem>
-                      <SelectItem value="manager">Manager</SelectItem>
-                      <SelectItem value="accountant">Accountant</SelectItem>
-                      <SelectItem value="admin">Admin</SelectItem>
+                      {roles.map((role) => (
+                        <SelectItem key={role} value={role} className="capitalize">
+                          {role}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
