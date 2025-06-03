@@ -29,7 +29,6 @@ import {
   SidebarProvider,
   SidebarTrigger,
   SidebarInset,
-  useSidebar,
 } from '@/components/ui/sidebar';
 import {
   Drawer,
@@ -39,7 +38,6 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { usePrivileges } from '@/hooks/usePrivileges';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { cn } from '@/lib/utils';
 
 const Navigation = ({ children }: { children?: React.ReactNode }) => {
   const { signOut, user } = useAuth();
@@ -168,7 +166,11 @@ const Navigation = ({ children }: { children?: React.ReactNode }) => {
               </DrawerTrigger>
               <DrawerContent>
                 <div className="h-[80vh]">
-                  <SidebarMenuContent />
+                  <SidebarProvider>
+                    <Sidebar>
+                      <SidebarMenuContent />
+                    </Sidebar>
+                  </SidebarProvider>
                 </div>
               </DrawerContent>
             </Drawer>
