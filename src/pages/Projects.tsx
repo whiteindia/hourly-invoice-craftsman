@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -16,20 +17,17 @@ import Navigation from '@/components/Navigation';
 import { logActivity } from '@/utils/activityLogger';
 
 type ProjectStatus = Database['public']['Enums']['project_status'];
+type ProjectType = Database['public']['Enums']['project_type'];
 
 interface Project {
   id: string;
   name: string;
-  description: string;
   client_id: string;
+  type: ProjectType;
   hourly_rate: number;
   status: ProjectStatus;
   created_at: string;
   clients?: {
-    name: string;
-  };
-  services?: {
-    id: string;
     name: string;
   };
 }
@@ -48,9 +46,8 @@ const Projects = () => {
   const queryClient = useQueryClient();
   const [newProject, setNewProject] = useState({
     name: '',
-    description: '',
     client_id: '',
-    service_id: '',
+    type: 'Web Development' as ProjectType,
     hourly_rate: 0,
     status: 'Active' as ProjectStatus
   });
@@ -67,8 +64,7 @@ const Projects = () => {
         .from('projects')
         .select(`
           *,
-          clients(name),
-          services(name)
+          clients(name)
         `)
         .order('created_at', { ascending: false });
       
@@ -133,9 +129,8 @@ const Projects = () => {
       setIsDialogOpen(false);
       setNewProject({
         name: '',
-        description: '',
         client_id: '',
-        service_id: '',
+        type: 'Web Development',
         hourly_rate: 0,
         status: 'Active'
       });
@@ -214,10 +209,10 @@ const Projects = () => {
     }
   });
 
-  // Filter projects based on global service filter
+  // Filter projects based on global service filter (simplified for now)
   const filteredProjects = projects.filter(project => {
     if (globalServiceFilter === 'all') return true;
-    return project.services?.id === globalServiceFilter;
+    return project.type === globalServiceFilter;
   });
 
   const handleCreateProject = async () => {
@@ -326,15 +321,6 @@ const Projects = () => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="description">Description</Label>
-                    <Input
-                      id="description"
-                      placeholder="Project description"
-                      value={newProject.description}
-                      onChange={(e) => setNewProject({ ...newProject, description: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-2">
                     <Label htmlFor="client">Client</Label>
                     <Select value={newProject.client_id} onValueChange={(value) => setNewProject({ ...newProject, client_id: value })}>
                       <SelectTrigger>
@@ -350,17 +336,16 @@ const Projects = () => {
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="service">Service Type</Label>
-                    <Select value={newProject.service_id} onValueChange={(value) => setNewProject({ ...newProject, service_id: value })}>
+                    <Label htmlFor="type">Project Type</Label>
+                    <Select value={newProject.type} onValueChange={(value) => setNewProject({ ...newProject, type: value as ProjectType })}>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select a service" />
+                        <SelectValue placeholder="Select a type" />
                       </SelectTrigger>
                       <SelectContent>
-                        {services.map((service) => (
-                          <SelectItem key={service.id} value={service.id}>
-                            {service.name}
-                          </SelectItem>
-                        ))}
+                        <SelectItem value="Web Development">Web Development</SelectItem>
+                        <SelectItem value="Mobile App">Mobile App</SelectItem>
+                        <SelectItem value="UI/UX Design">UI/UX Design</SelectItem>
+                        <SelectItem value="Consulting">Consulting</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -412,7 +397,7 @@ const Projects = () => {
                 <TableRow>
                   <TableHead>Name</TableHead>
                   <TableHead>Client</TableHead>
-                  <TableHead>Service</TableHead>
+                  <TableHead>Type</TableHead>
                   <TableHead>Rate</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Actions</TableHead>
@@ -423,7 +408,7 @@ const Projects = () => {
                   <TableRow key={project.id}>
                     <TableCell className="font-medium">{project.name}</TableCell>
                     <TableCell>{project.clients?.name}</TableCell>
-                    <TableCell>{project.services?.name}</TableCell>
+                    <TableCell>{project.type}</TableCell>
                     <TableCell>₹{project.hourly_rate}/hr</TableCell>
                     <TableCell>
                       <Badge className={getStatusColor(project.status)}>
@@ -461,9 +446,6 @@ const Projects = () => {
 
         {/* Edit Project Dialog */}
         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-          <DialogTrigger asChild>
-            <div></div>
-          </DialogTrigger>
           <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>Edit Project</DialogTitle>
@@ -482,15 +464,6 @@ const Projects = () => {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="description">Description</Label>
-                <Input
-                  id="description"
-                  placeholder="Project description"
-                  value={editingProject?.description || ''}
-                  onChange={(e) => setEditingProject({ ...editingProject!, description: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
                 <Label htmlFor="client">Client</Label>
                 <Select value={editingProject?.client_id || ''} onValueChange={(value) => setEditingProject({ ...editingProject!, client_id: value })}>
                   <SelectTrigger>
@@ -506,20 +479,19 @@ const Projects = () => {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="service">Service Type</Label>
-                  <Select value={editingProject?.service_id || ''} onValueChange={(value) => setEditingProject({ ...editingProject!, service_id: value })}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a service" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {services.map((service) => (
-                        <SelectItem key={service.id} value={service.id}>
-                          {service.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                <Label htmlFor="type">Project Type</Label>
+                <Select value={editingProject?.type || ''} onValueChange={(value) => setEditingProject({ ...editingProject!, type: value as ProjectType })}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Web Development">Web Development</SelectItem>
+                    <SelectItem value="Mobile App">Mobile App</SelectItem>
+                    <SelectItem value="UI/UX Design">UI/UX Design</SelectItem>
+                    <SelectItem value="Consulting">Consulting</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="hourly_rate">Hourly Rate</Label>
                 <Input

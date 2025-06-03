@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -23,22 +24,16 @@ type TaskStatus = Database['public']['Enums']['task_status'];
 interface Task {
   id: string;
   name: string;
-  description: string | null;
   project_id: string;
-  assigned_to: string;
+  assignee_id: string;
   status: TaskStatus;
   created_at: string;
-  start_time: string | null;
-  end_time: string | null;
-  total_time: number | null;
   invoiced: boolean;
+  hours: number;
+  date: string;
   projects: {
     name: string;
     hourly_rate: number;
-    services: {
-      id: string;
-      name: string;
-    };
   };
   employees: {
     name: string;
@@ -64,10 +59,9 @@ const Tasks = () => {
   const queryClient = useQueryClient();
   const [newTask, setNewTask] = useState({
     name: '',
-    description: '',
     project_id: '',
-    assigned_to: '',
-    status: 'To Do' as TaskStatus
+    assignee_id: '',
+    status: 'Not Started' as TaskStatus
   });
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -89,8 +83,8 @@ const Tasks = () => {
         .from('tasks')
         .select(`
           *,
-          projects(name, hourly_rate, services(id, name)),
-          employees(name)
+          projects(name, hourly_rate),
+          employees!tasks_assignee_id_fkey(name)
         `)
         .order('created_at', { ascending: false });
       
@@ -158,8 +152,8 @@ const Tasks = () => {
         entity_type: 'task',
         entity_id: data.id,
         entity_name: data.name,
-        description: `Created task ${data.name} for ${data.projects.name}`,
-        comment: data.description || ''
+        description: `Created task ${data.name}`,
+        comment: ''
       });
       
       return data;
@@ -168,10 +162,9 @@ const Tasks = () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
       setNewTask({
         name: '',
-        description: '',
         project_id: '',
-        assigned_to: '',
-        status: 'To Do'
+        assignee_id: '',
+        status: 'Not Started'
       });
       setIsDialogOpen(false);
       toast.success('Task created successfully!');
@@ -199,8 +192,8 @@ const Tasks = () => {
         entity_type: 'task',
         entity_id: data.id,
         entity_name: data.name,
-        description: `Updated task ${data.name} for ${data.projects.name}`,
-        comment: data.description || ''
+        description: `Updated task ${data.name}`,
+        comment: ''
       });
       
       return data;
@@ -245,76 +238,14 @@ const Tasks = () => {
     }
   });
 
-  // Mutation to start the timer for a task
-  const startTimerMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { data, error } = await supabase
-        .from('tasks')
-        .update({ start_time: new Date().toISOString(), end_time: null })
-        .eq('id', id)
-        .select()
-        .single();
-      
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      setActiveTask(data as Task);
-      toast.success('Timer started for task!');
-    },
-    onError: (error) => {
-      toast.error('Failed to start timer: ' + error.message);
-    }
-  });
-
-  // Mutation to stop the timer for a task
-  const stopTimerMutation = useMutation({
-    mutationFn: async ({ id, duration, comment }: { id: string; duration: number; comment: string }) => {
-      const now = new Date();
-      const { data, error } = await supabase
-        .from('tasks')
-        .update({ 
-          end_time: now.toISOString(),
-          total_time: duration,
-          status: 'Completed'
-        })
-        .eq('id', id)
-        .select()
-        .single();
-      
-      if (error) throw error;
-
-      // Log activity
-      await logActivity({
-        action_type: 'updated',
-        entity_type: 'task',
-        entity_id: data.id,
-        entity_name: data.name,
-        description: `Stopped timer for task ${data.name}`,
-        comment: `Logged ${duration} seconds. ${comment}`
-      });
-      
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      setActiveTask(null);
-      toast.success('Timer stopped and time logged!');
-    },
-    onError: (error) => {
-      toast.error('Failed to stop timer: ' + error.message);
-    }
-  });
-
   // Filter tasks based on all filters including global service filter
   const filteredTasks = tasks.filter(task => {
     const matchesProject = selectedProject === 'all' || task.project_id === selectedProject;
     const matchesStatus = statusFilter === 'all' || task.status === statusFilter;
-    const matchesAssignee = assigneeFilter === 'all' || task.assigned_to === assigneeFilter;
-    const matchesSearch = task.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         task.description?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesService = globalServiceFilter === 'all' || task.projects?.services?.id === globalServiceFilter;
+    const matchesAssignee = assigneeFilter === 'all' || task.assignee_id === assigneeFilter;
+    const matchesSearch = task.name.toLowerCase().includes(searchTerm.toLowerCase());
+    // Simplified service filter for now since we don't have the relationship
+    const matchesService = globalServiceFilter === 'all' || true;
     
     return matchesProject && matchesStatus && matchesAssignee && matchesSearch && matchesService;
   });
@@ -331,14 +262,6 @@ const Tasks = () => {
 
   const handleDeleteTask = (id: string) => {
     deleteTaskMutation.mutate(id);
-  };
-
-  const handleStartTimer = (id: string) => {
-    startTimerMutation.mutate(id);
-  };
-
-  const handleStopTimer = (id: string, duration: number, comment: string) => {
-    stopTimerMutation.mutate({ id, duration, comment });
   };
 
   if (isLoading) {
@@ -404,15 +327,6 @@ const Tasks = () => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="description">Description</Label>
-                    <Textarea
-                      id="description"
-                      placeholder="Task description"
-                      value={newTask.description}
-                      onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-2">
                     <Label htmlFor="project">Project</Label>
                     <Select value={newTask.project_id} onValueChange={(value) => setNewTask({ ...newTask, project_id: value })}>
                       <SelectTrigger>
@@ -429,7 +343,7 @@ const Tasks = () => {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="assignee">Assignee</Label>
-                    <Select value={newTask.assigned_to} onValueChange={(value) => setNewTask({ ...newTask, assigned_to: value })}>
+                    <Select value={newTask.assignee_id} onValueChange={(value) => setNewTask({ ...newTask, assignee_id: value })}>
                       <SelectTrigger>
                         <SelectValue placeholder="Select an assignee" />
                       </SelectTrigger>
@@ -461,7 +375,7 @@ const Tasks = () => {
                   <Label htmlFor="search">Search Tasks</Label>
                   <Input
                     id="search"
-                    placeholder="Search by name or description..."
+                    placeholder="Search by name..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
@@ -492,7 +406,7 @@ const Tasks = () => {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All Statuses</SelectItem>
-                      <SelectItem value="To Do">To Do</SelectItem>
+                      <SelectItem value="Not Started">Not Started</SelectItem>
                       <SelectItem value="In Progress">In Progress</SelectItem>
                       <SelectItem value="Completed">Completed</SelectItem>
                     </SelectContent>
@@ -539,14 +453,6 @@ const Tasks = () => {
           </CardContent>
         </Card>
 
-        {/* Active Time Tracker */}
-        {activeTask && (
-          <TimeTracker 
-            task={activeTask} 
-            onStop={(duration, comment) => handleStopTimer(activeTask.id, duration, comment)}
-          />
-        )}
-
         {/* Tasks List */}
         <Card>
           <CardHeader>
@@ -581,27 +487,16 @@ const Tasks = () => {
                       <TableCell>{task.employees?.name}</TableCell>
                       <TableCell>
                         <Badge className={
-                          task.status === 'To Do' ? 'bg-gray-100 text-gray-800' :
+                          task.status === 'Not Started' ? 'bg-gray-100 text-gray-800' :
                           task.status === 'In Progress' ? 'bg-blue-100 text-blue-800' :
                           'bg-green-100 text-green-800'
                         }>
                           {task.status}
                         </Badge>
                       </TableCell>
-                      <TableCell>{task.total_time ? (task.total_time / 60).toFixed(2) + ' hours' : '0 hours'}</TableCell>
+                      <TableCell>{task.hours ? task.hours + ' hours' : '0 hours'}</TableCell>
                       <TableCell>
                         <div className="flex space-x-2">
-                          {!task.start_time ? (
-                            <Button variant="outline" size="sm" onClick={() => handleStartTimer(task.id)}>
-                              <Play className="h-4 w-4 mr-2" />
-                              Start
-                            </Button>
-                          ) : (
-                            <Button variant="outline" size="sm" onClick={() => setActiveTask(task)}>
-                              <Pause className="h-4 w-4 mr-2" />
-                              Pause
-                            </Button>
-                          )}
                           <Button
                             variant="outline"
                             size="sm"
@@ -641,11 +536,6 @@ const Tasks = () => {
         </Card>
 
         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-          <DialogTrigger asChild>
-            <Button variant="outline" className="hidden">
-              Edit Task
-            </Button>
-          </DialogTrigger>
           <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>Edit Task</DialogTitle>
@@ -665,15 +555,6 @@ const Tasks = () => {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="description">Description</Label>
-                  <Textarea
-                    id="description"
-                    placeholder="Task description"
-                    value={editingTask.description || ''}
-                    onChange={(e) => setEditingTask({ ...editingTask, description: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
                   <Label htmlFor="project">Project</Label>
                   <Select value={editingTask.project_id} onValueChange={(value) => setEditingTask({ ...editingTask, project_id: value })}>
                     <SelectTrigger>
@@ -690,7 +571,7 @@ const Tasks = () => {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="assignee">Assignee</Label>
-                  <Select value={editingTask.assigned_to} onValueChange={(value) => setEditingTask({ ...editingTask, assigned_to: value })}>
+                  <Select value={editingTask.assignee_id} onValueChange={(value) => setEditingTask({ ...editingTask, assignee_id: value })}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select an assignee" />
                     </SelectTrigger>
@@ -710,7 +591,7 @@ const Tasks = () => {
                       <SelectValue placeholder="Select status" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="To Do">To Do</SelectItem>
+                      <SelectItem value="Not Started">Not Started</SelectItem>
                       <SelectItem value="In Progress">In Progress</SelectItem>
                       <SelectItem value="Completed">Completed</SelectItem>
                     </SelectContent>
