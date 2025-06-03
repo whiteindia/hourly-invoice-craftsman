@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -14,13 +14,37 @@ import {
   FileText,
   Activity
 } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import Navigation from '@/components/Navigation';
 import { useNavigate } from 'react-router-dom';
 
 const Index = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+
+  // Set up real-time subscription for activity feed
+  useEffect(() => {
+    const channel = supabase
+      .channel('activity-feed-updates')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'activity_feed'
+        },
+        () => {
+          // Invalidate activity feed query to refetch data
+          queryClient.invalidateQueries({ queryKey: ['activity-feed'] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
 
   // Get running tasks (tasks with active time entries)
   const { data: runningTasks = [] } = useQuery({
@@ -179,6 +203,10 @@ const Index = () => {
         return '✅';
       case 'logged_time':
         return '⏱️';
+      case 'timer_started':
+        return '▶️';
+      case 'timer_stopped':
+        return '⏹️';
       case 'logged_in':
         return '🔑';
       case 'status_changed_to_in_progress':

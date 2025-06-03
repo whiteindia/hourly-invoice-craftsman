@@ -51,6 +51,26 @@ export const logTaskUpdate = async (taskName: string, taskId: string, action: st
   });
 };
 
+export const logTaskCreated = async (taskName: string, taskId: string, projectName: string) => {
+  await logActivity({
+    action_type: 'created',
+    entity_type: 'task',
+    entity_id: taskId,
+    entity_name: taskName,
+    description: `Created new task: ${taskName} in project ${projectName}`
+  });
+};
+
+export const logTaskStatusChanged = async (taskName: string, taskId: string, newStatus: string, oldStatus: string) => {
+  await logActivity({
+    action_type: `status_changed_to_${newStatus.toLowerCase().replace(' ', '_')}`,
+    entity_type: 'task',
+    entity_id: taskId,
+    entity_name: taskName,
+    description: `Changed task status from ${oldStatus} to ${newStatus}: ${taskName}`
+  });
+};
+
 export const logTimeEntry = async (taskName: string, taskId: string, duration: string, comment?: string) => {
   await logActivity({
     action_type: 'logged_time',
@@ -59,6 +79,26 @@ export const logTimeEntry = async (taskName: string, taskId: string, duration: s
     entity_name: taskName,
     description: `Logged ${duration} on task: ${taskName}`,
     comment
+  });
+};
+
+export const logTimerStarted = async (taskName: string, taskId: string) => {
+  await logActivity({
+    action_type: 'timer_started',
+    entity_type: 'task',
+    entity_id: taskId,
+    entity_name: taskName,
+    description: `Started timer for task: ${taskName}`
+  });
+};
+
+export const logTimerStopped = async (taskName: string, taskId: string, duration: string) => {
+  await logActivity({
+    action_type: 'timer_stopped',
+    entity_type: 'task',
+    entity_id: taskId,
+    entity_name: taskName,
+    description: `Stopped timer for task: ${taskName} (${duration})`
   });
 };
 
@@ -79,6 +119,16 @@ export const logProjectActivity = async (projectName: string, projectId: string,
     entity_name: projectName,
     description: `${action} project: ${projectName}`,
     comment
+  });
+};
+
+export const logProjectCreated = async (projectName: string, projectId: string, clientName: string) => {
+  await logActivity({
+    action_type: 'created',
+    entity_type: 'project',
+    entity_id: projectId,
+    entity_name: projectName,
+    description: `Created new project: ${projectName} for client ${clientName}`
   });
 };
 
