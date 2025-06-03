@@ -6,12 +6,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Plus, Edit, Trash2 } from 'lucide-react';
 import RoleDialog from './RoleDialog';
-import type { Database } from '@/integrations/supabase/types';
-
-type AppRole = Database['public']['Enums']['app_role'];
 
 interface RoleWithPrivileges {
-  role: AppRole;
+  role: string;
   privilegeCount: number;
 }
 
@@ -19,7 +16,7 @@ const RolesManagement = () => {
   const [roles, setRoles] = useState<RoleWithPrivileges[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [selectedRole, setSelectedRole] = useState<AppRole | null>(null);
+  const [selectedRole, setSelectedRole] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
 
   useEffect(() => {
@@ -30,12 +27,22 @@ const RolesManagement = () => {
     try {
       console.log('Fetching roles...');
       
-      // Define the available roles properly typed
-      const availableRoles: AppRole[] = ['admin', 'manager', 'teamlead', 'associate', 'accountant'];
+      // Get unique roles from role_privileges table
+      const { data: roleData, error } = await supabase
+        .from('role_privileges')
+        .select('role')
+        .order('role');
+
+      if (error) {
+        console.error('Error fetching roles:', error);
+        throw error;
+      }
+
+      // Get unique roles and count privileges for each
+      const uniqueRoles = [...new Set(roleData?.map(r => r.role) || [])];
       
-      // Count privileges for each role
       const roleStats = await Promise.all(
-        availableRoles.map(async (role: AppRole) => {
+        uniqueRoles.map(async (role: string) => {
           const { count, error } = await supabase
             .from('role_privileges')
             .select('*', { count: 'exact' })
@@ -72,13 +79,13 @@ const RolesManagement = () => {
     setDialogOpen(true);
   };
 
-  const handleEditRole = (role: AppRole) => {
+  const handleEditRole = (role: string) => {
     setSelectedRole(role);
     setIsEditing(true);
     setDialogOpen(true);
   };
 
-  const handleDeleteRole = async (role: AppRole) => {
+  const handleDeleteRole = async (role: string) => {
     if (!confirm(`Are you sure you want to delete the ${role} role and all its privileges?`)) {
       return;
     }
@@ -107,6 +114,18 @@ const RolesManagement = () => {
     fetchRoles();
   };
 
+  const getRoleDescription = (role: string) => {
+    const descriptions: Record<string, string> = {
+      'admin': 'Full system access and management',
+      'manager': 'Project and team management capabilities',
+      'teamlead': 'Task assignment and team coordination',
+      'associate': 'Task execution and time logging',
+      'accountant': 'Financial management and reporting',
+      'sales-executive': 'Sales and client relationship management'
+    };
+    return descriptions[role] || 'Custom role with specific permissions';
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
@@ -123,7 +142,7 @@ const RolesManagement = () => {
             <div>
               <CardTitle>System Roles</CardTitle>
               <CardDescription>
-                Manage roles and their permissions across the system
+                Manage roles and their permissions across the system. You can create any custom role name.
               </CardDescription>
             </div>
             <Button onClick={handleAddRole}>
@@ -165,11 +184,7 @@ const RolesManagement = () => {
                 </CardHeader>
                 <CardContent className="pt-0">
                   <div className="text-sm text-gray-600">
-                    {roleData.role === 'admin' && 'Full system access'}
-                    {roleData.role === 'manager' && 'Project and team management'}
-                    {roleData.role === 'teamlead' && 'Task assignment and team coordination'}
-                    {roleData.role === 'associate' && 'Task execution and time logging'}
-                    {roleData.role === 'accountant' && 'Financial management access'}
+                    {getRoleDescription(roleData.role)}
                   </div>
                 </CardContent>
               </Card>

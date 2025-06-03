@@ -2,14 +2,11 @@
 import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import type { Database } from '@/integrations/supabase/types';
-
-type AppRole = Database['public']['Enums']['app_role'];
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
-  requiredRole?: AppRole;
-  allowedRoles?: AppRole[];
+  requiredRole?: string;
+  allowedRoles?: string[];
   requireSuperAdmin?: boolean;
 }
 
@@ -54,7 +51,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
       return false;
     }
     
-    if (allowedRoles && !allowedRoles.includes(userRole as AppRole)) {
+    if (allowedRoles && !allowedRoles.includes(userRole as string)) {
       return false;
     }
     

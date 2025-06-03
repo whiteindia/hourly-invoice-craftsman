@@ -387,7 +387,7 @@ export type Database = {
           id: string
           operation: Database["public"]["Enums"]["crud_operation"]
           page_name: string
-          role: Database["public"]["Enums"]["app_role"]
+          role: string
           updated_at: string | null
         }
         Insert: {
@@ -396,7 +396,7 @@ export type Database = {
           id?: string
           operation: Database["public"]["Enums"]["crud_operation"]
           page_name: string
-          role: Database["public"]["Enums"]["app_role"]
+          role: string
           updated_at?: string | null
         }
         Update: {
@@ -405,7 +405,7 @@ export type Database = {
           id?: string
           operation?: Database["public"]["Enums"]["crud_operation"]
           page_name?: string
-          role?: Database["public"]["Enums"]["app_role"]
+          role?: string
           updated_at?: string | null
         }
         Relationships: []
@@ -600,19 +600,19 @@ export type Database = {
         Row: {
           created_at: string
           id: string
-          role: Database["public"]["Enums"]["app_role"]
+          role: string
           user_id: string
         }
         Insert: {
           created_at?: string
           id?: string
-          role: Database["public"]["Enums"]["app_role"]
+          role: string
           user_id: string
         }
         Update: {
           created_at?: string
           id?: string
-          role?: Database["public"]["Enums"]["app_role"]
+          role?: string
           user_id?: string
         }
         Relationships: []
@@ -623,10 +623,7 @@ export type Database = {
     }
     Functions: {
       has_role: {
-        Args: {
-          _user_id: string
-          _role: Database["public"]["Enums"]["app_role"]
-        }
+        Args: { _user_id: string; _role: string }
         Returns: boolean
       }
       setup_admin_user: {
@@ -635,14 +632,6 @@ export type Database = {
       }
     }
     Enums: {
-      app_role:
-        | "admin"
-        | "client"
-        | "manager"
-        | "accountant"
-        | "employee"
-        | "associate"
-        | "teamlead"
       crud_operation: "create" | "read" | "update" | "delete"
       invoice_status: "Draft" | "Sent" | "Paid" | "Overdue"
       project_status: "Active" | "Completed" | "On Hold"
@@ -769,15 +758,6 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: [
-        "admin",
-        "client",
-        "manager",
-        "accountant",
-        "employee",
-        "associate",
-        "teamlead",
-      ],
       crud_operation: ["create", "read", "update", "delete"],
       invoice_status: ["Draft", "Sent", "Paid", "Overdue"],
       project_status: ["Active", "Completed", "On Hold"],

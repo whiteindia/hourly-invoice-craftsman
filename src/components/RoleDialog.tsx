@@ -15,12 +15,11 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { Database } from '@/integrations/supabase/types';
 
-type AppRole = Database['public']['Enums']['app_role'];
 type CrudOperation = Database['public']['Enums']['crud_operation'];
 
 interface Privilege {
   id?: string;
-  role: AppRole;
+  role: string;
   page_name: string;
   operation: CrudOperation;
   allowed: boolean;
@@ -29,7 +28,7 @@ interface Privilege {
 interface RoleDialogProps {
   open: boolean;
   onClose: () => void;
-  role: AppRole | null;
+  role: string | null;
   isEditing: boolean;
 }
 
@@ -42,8 +41,8 @@ const RoleDialog: React.FC<RoleDialogProps> = ({ open, onClose, role, isEditing 
   const pages = ['dashboard', 'clients', 'employees', 'projects', 'tasks', 'invoices', 'payments', 'services', 'wages'];
   const operations: CrudOperation[] = ['create', 'read', 'update', 'delete'];
 
-  // Map of common role names to valid enum values
-  const roleMapping: Record<string, AppRole> = {
+  // Map of common role names to standardized values
+  const roleMapping: Record<string, string> = {
     'admin': 'admin',
     'administrator': 'admin',
     'manager': 'manager',
@@ -56,17 +55,17 @@ const RoleDialog: React.FC<RoleDialogProps> = ({ open, onClose, role, isEditing 
     'employee': 'associate',
     'staff': 'associate',
     'worker': 'associate',
-    'sales-executive': 'associate',
-    'sales executive': 'associate',
-    'sales': 'associate',
+    'sales-executive': 'sales-executive',
+    'sales executive': 'sales-executive',
+    'sales': 'sales-executive',
     'accountant': 'accountant',
     'finance': 'accountant',
     'accounting': 'accountant'
   };
 
-  const getValidRole = (inputRole: string): AppRole | null => {
+  const getValidRole = (inputRole: string): string => {
     const normalized = inputRole.toLowerCase().trim();
-    return roleMapping[normalized] || null;
+    return roleMapping[normalized] || normalized;
   };
 
   useEffect(() => {
@@ -81,7 +80,7 @@ const RoleDialog: React.FC<RoleDialogProps> = ({ open, onClose, role, isEditing 
     }
   }, [open, isEditing, role]);
 
-  const fetchRolePrivileges = async (roleToFetch: AppRole) => {
+  const fetchRolePrivileges = async (roleToFetch: string) => {
     setLoading(true);
     try {
       const { data, error } = await supabase
@@ -136,12 +135,8 @@ const RoleDialog: React.FC<RoleDialogProps> = ({ open, onClose, role, isEditing 
       return;
     }
 
-    // Get the valid enum role for the input
+    // Get the standardized role for the input
     const validRole = getValidRole(roleName);
-    if (!validRole) {
-      toast.error(`Role "${roleName}" is not supported. Please use one of: admin, manager, teamlead, associate, accountant, sales-executive, or similar variations.`);
-      return;
-    }
 
     setSaving(true);
     try {
@@ -209,7 +204,7 @@ const RoleDialog: React.FC<RoleDialogProps> = ({ open, onClose, role, isEditing 
           </DialogTitle>
           <DialogDescription>
             Configure role permissions for different pages and operations. 
-            Supported role names: admin, manager, teamlead, associate, accountant, sales-executive (and variations)
+            You can create any role name - common ones include: admin, manager, teamlead, associate, accountant, sales-executive
           </DialogDescription>
         </DialogHeader>
 
@@ -220,16 +215,16 @@ const RoleDialog: React.FC<RoleDialogProps> = ({ open, onClose, role, isEditing 
               id="roleName"
               value={roleName}
               onChange={(e) => setRoleName(e.target.value)}
-              placeholder="Enter role name (e.g., sales-executive, admin, manager)"
+              placeholder="Enter any role name (e.g., sales-executive, admin, custom-role)"
               disabled={isEditing}
               className={isEditing ? "bg-gray-100" : ""}
             />
             <p className="text-sm text-gray-500">
-              Examples: admin, manager, teamlead, associate, accountant, sales-executive, supervisor, etc.
+              You can create any role name. Common examples: admin, manager, teamlead, associate, accountant, sales-executive, etc.
             </p>
             {roleName && !isEditing && (
               <p className="text-sm text-blue-600">
-                "{roleName}" will be mapped to: {getValidRole(roleName) || 'Invalid role name'}
+                "{roleName}" will be standardized as: "{getValidRole(roleName)}"
               </p>
             )}
           </div>
