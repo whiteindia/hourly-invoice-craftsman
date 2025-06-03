@@ -12,6 +12,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import Navigation from '@/components/Navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { logActivity } from '@/utils/activityLogger';
 
 interface Service {
   id: string;
@@ -60,10 +61,20 @@ const Services = () => {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSuccess: async (data) => {
       queryClient.invalidateQueries({ queryKey: ['services'] });
       resetForm();
       toast.success('Service created successfully!');
+      
+      // Log activity
+      await logActivity({
+        action_type: 'created',
+        entity_type: 'service',
+        entity_id: data.id,
+        entity_name: data.name,
+        description: `Created new service: ${data.name} with hourly rate ₹${data.hourly_rate}`,
+        comment: `Hourly Rate: ₹${data.hourly_rate}`
+      });
     },
     onError: (error) => {
       toast.error('Failed to create service: ' + error.message);
@@ -87,10 +98,20 @@ const Services = () => {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSuccess: async (data) => {
       queryClient.invalidateQueries({ queryKey: ['services'] });
       resetForm();
       toast.success('Service updated successfully!');
+      
+      // Log activity
+      await logActivity({
+        action_type: 'updated',
+        entity_type: 'service',
+        entity_id: data.id,
+        entity_name: data.name,
+        description: `Updated service: ${data.name}`,
+        comment: `New hourly rate: ₹${data.hourly_rate}`
+      });
     },
     onError: (error) => {
       toast.error('Failed to update service: ' + error.message);
@@ -105,10 +126,24 @@ const Services = () => {
         .eq('id', id);
       
       if (error) throw error;
+      return id;
     },
-    onSuccess: () => {
+    onSuccess: async (deletedId) => {
       queryClient.invalidateQueries({ queryKey: ['services'] });
       toast.success('Service deleted successfully!');
+      
+      // Log activity
+      const deletedService = services.find(s => s.id === deletedId);
+      if (deletedService) {
+        await logActivity({
+          action_type: 'deleted',
+          entity_type: 'service',
+          entity_id: deletedService.id,
+          entity_name: deletedService.name,
+          description: `Deleted service: ${deletedService.name}`,
+          comment: `Previous hourly rate: ₹${deletedService.hourly_rate}`
+        });
+      }
     },
     onError: (error) => {
       toast.error('Failed to delete service: ' + error.message);

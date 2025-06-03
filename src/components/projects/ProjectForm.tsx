@@ -1,413 +1,220 @@
-
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Plus } from 'lucide-react';
-import type { Database } from '@/integrations/supabase/types';
-
-type ProjectType = Database['public']['Enums']['project_type'];
-type ProjectStatus = Database['public']['Enums']['project_status'];
-
-interface Client {
-  id: string;
-  name: string;
-}
-
-interface Service {
-  id: string;
-  name: string;
-}
-
-interface ProjectData {
-  id: string;
-  name: string;
-  client_id: string;
-  type: ProjectType;
-  hourly_rate: number;
-  project_amount: number | null;
-  total_hours: number;
-  status: ProjectStatus;
-  start_date: string | null;
-  deadline: string | null;
-  brd_file_url: string | null;
-  created_at: string;
-  clients: {
-    name: string;
-  };
-}
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { useProjectOperations } from '@/hooks/useProjectOperations';
 
 interface ProjectFormProps {
-  clients: Client[];
-  services: Service[];
-  newProject: {
-    name: string;
-    client_id: string;
-    type: ProjectType;
-    billing_type: 'hourly' | 'project';
-    hourly_rate: number;
-    project_amount: number;
-    start_date: string;
-    deadline: string;
-    brd_file: File | null;
-  };
-  setNewProject: React.Dispatch<React.SetStateAction<any>>;
-  editingProject: ProjectData | null;
-  setEditingProject: React.Dispatch<React.SetStateAction<ProjectData | null>>;
-  editBillingType: 'hourly' | 'project';
-  setEditBillingType: React.Dispatch<React.SetStateAction<'hourly' | 'project'>>;
-  editBrdFile: File | null;
-  setEditBrdFile: React.Dispatch<React.SetStateAction<File | null>>;
-  isDialogOpen: boolean;
-  setIsDialogOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  isEditDialogOpen: boolean;
-  setIsEditDialogOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  uploadingBRD: boolean;
-  onCreateProject: () => void;
-  onUpdateProject: () => void;
-  onViewBRD: (url: string) => void;
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+  editingProject: any;
+  onClose: () => void;
 }
 
-const ProjectForm: React.FC<ProjectFormProps> = ({
-  clients,
-  services,
-  newProject,
-  setNewProject,
-  editingProject,
-  setEditingProject,
-  editBillingType,
-  setEditBillingType,
-  editBrdFile,
-  setEditBrdFile,
-  isDialogOpen,
-  setIsDialogOpen,
-  isEditDialogOpen,
-  setIsEditDialogOpen,
-  uploadingBRD,
-  onCreateProject,
-  onUpdateProject,
-  onViewBRD
-}) => {
-  const isProjectBased = (project: ProjectData) => {
-    return project.project_amount !== null || project.brd_file_url !== null;
+const ProjectForm = ({ isOpen, onOpenChange, editingProject, onClose }: ProjectFormProps) => {
+  const { createProjectMutation, updateProjectMutation } = useProjectOperations();
+  
+  const [formData, setFormData] = useState({
+    name: '',
+    client_id: '',
+    type: '',
+    hourly_rate: '',
+    project_amount: '',
+    start_date: '',
+    deadline: '',
+    status: 'Active'
+  });
+  const [brdFile, setBrdFile] = useState<File | null>(null);
+
+  const { data: clients = [], isLoading } = useQuery({
+    queryKey: ['clients'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('clients')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      return data;
+    }
+  });
+
+  useEffect(() => {
+    if (editingProject) {
+      setFormData({
+        name: editingProject.name,
+        client_id: editingProject.client_id,
+        type: editingProject.type,
+        hourly_rate: editingProject.hourly_rate?.toString() || '',
+        project_amount: editingProject.project_amount?.toString() || '',
+        start_date: editingProject.start_date?.split('T')[0] || '',
+        deadline: editingProject.deadline?.split('T')[0] || '',
+        status: editingProject.status
+      });
+    } else {
+      setFormData({
+        name: '',
+        client_id: '',
+        type: '',
+        hourly_rate: '',
+        project_amount: '',
+        start_date: '',
+        deadline: '',
+        status: 'Active'
+      });
+    }
+  }, [editingProject]);
+
+  const handleSubmit = () => {
+    if (!formData.name || !formData.client_id || !formData.type) {
+      return;
+    }
+
+    const projectData = {
+      name: formData.name,
+      client_id: formData.client_id,
+      type: formData.type as 'Fixed Price' | 'Hourly',
+      hourly_rate: formData.hourly_rate ? parseFloat(formData.hourly_rate) : 0,
+      project_amount: formData.project_amount ? parseFloat(formData.project_amount) : 0,
+      start_date: formData.start_date || null,
+      deadline: formData.deadline || null,
+      status: formData.status as 'Active' | 'On Hold' | 'Completed'
+    };
+
+    if (editingProject) {
+      updateProjectMutation.mutate({ id: editingProject.id, updates: projectData, brdFile });
+    } else {
+      createProjectMutation.mutate({ projectData, brdFile });
+    }
   };
 
   return (
-    <>
-      {/* Create Project Dialog */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogTrigger asChild>
-          <Button className="bg-blue-600 hover:bg-blue-700">
-            <Plus className="h-4 w-4 mr-2" />
-            Add Project
-          </Button>
-        </DialogTrigger>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Create New Project</DialogTitle>
-            <DialogDescription>
-              Add a new project for a client.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Project Name</Label>
-              <Input
-                id="name"
-                placeholder="Project name"
-                value={newProject.name}
-                onChange={(e) => setNewProject({ ...newProject, name: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="client">Client</Label>
-              <Select value={newProject.client_id} onValueChange={(value) => setNewProject({ ...newProject, client_id: value })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a client" />
-                </SelectTrigger>
-                <SelectContent>
-                  {clients.map((client) => (
-                    <SelectItem key={client.id} value={client.id}>
-                      {client.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="type">Project Type (Service)</Label>
-              <Select value={newProject.type} onValueChange={(value) => setNewProject({ ...newProject, type: value as ProjectType })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select project type" />
-                </SelectTrigger>
-                <SelectContent>
-                  {services.map((service) => (
-                    <SelectItem key={service.id} value={service.name}>
-                      {service.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {newProject.type !== 'BRD' && (
-              <div className="space-y-2">
-                <Label htmlFor="billing_type">Billing Type</Label>
-                <Select value={newProject.billing_type} onValueChange={(value) => setNewProject({ ...newProject, billing_type: value as 'hourly' | 'project' })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select billing type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="hourly">Hourly</SelectItem>
-                    <SelectItem value="project">Project-based</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            
-            {newProject.type === 'BRD' ? (
-              <div className="space-y-2">
-                <Label htmlFor="project_amount">BRD Amount (₹)</Label>
-                <Input
-                  id="project_amount"
-                  type="number"
-                  placeholder="BRD project amount"
-                  value={newProject.project_amount}
-                  onChange={(e) => setNewProject({ ...newProject, project_amount: Number(e.target.value) })}
-                />
-              </div>
-            ) : newProject.billing_type === 'hourly' ? (
-              <div className="space-y-2">
-                <Label htmlFor="hourly_rate">Hourly Rate (₹)</Label>
-                <Input
-                  id="hourly_rate"
-                  type="number"
-                  placeholder="Hourly rate"
-                  value={newProject.hourly_rate}
-                  onChange={(e) => setNewProject({ ...newProject, hourly_rate: Number(e.target.value) })}
-                />
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <Label htmlFor="project_amount">Project Amount (₹)</Label>
-                <Input
-                  id="project_amount"
-                  type="number"
-                  placeholder="Total project amount"
-                  value={newProject.project_amount}
-                  onChange={(e) => setNewProject({ ...newProject, project_amount: Number(e.target.value) })}
-                />
-              </div>
-            )}
-
-            {(newProject.billing_type === 'project' || newProject.type === 'BRD') && (
-              <div className="space-y-2">
-                <Label htmlFor="deadline">Deadline</Label>
-                <Input
-                  id="deadline"
-                  type="date"
-                  value={newProject.deadline}
-                  onChange={(e) => setNewProject({ ...newProject, deadline: e.target.value })}
-                />
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <Label htmlFor="brd_file">BRD Document</Label>
-              <Input
-                id="brd_file"
-                type="file"
-                accept=".pdf,.doc,.docx"
-                onChange={(e) => setNewProject({ ...newProject, brd_file: e.target.files?.[0] || null })}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="start_date">Start Date</Label>
-              <Input
-                id="start_date"
-                type="date"
-                value={newProject.start_date}
-                onChange={(e) => setNewProject({ ...newProject, start_date: e.target.value })}
-              />
-            </div>
-
-            <Button onClick={onCreateProject} className="w-full" disabled={uploadingBRD}>
-              {uploadingBRD ? 'Uploading BRD...' : 'Create Project'}
-            </Button>
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{editingProject ? 'Edit Project' : 'Create New Project'}</DialogTitle>
+          <DialogDescription>
+            {editingProject ? 'Update project details' : 'Create a new project'}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="projectName">Project Name</Label>
+            <Input
+              id="projectName"
+              value={formData.name}
+              onChange={(e) => setFormData({...formData, name: e.target.value})}
+              placeholder="e.g., New Website Design"
+            />
           </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Edit Project Dialog */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Edit Project</DialogTitle>
-            <DialogDescription>
-              Update project details.
-            </DialogDescription>
-          </DialogHeader>
-          {editingProject && (
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="edit-name">Project Name</Label>
-                <Input
-                  id="edit-name"
-                  placeholder="Project name"
-                  value={editingProject.name}
-                  onChange={(e) => setEditingProject({ ...editingProject, name: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-client">Client</Label>
-                <Select value={editingProject.client_id} onValueChange={(value) => setEditingProject({ ...editingProject, client_id: value })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a client" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {clients.map((client) => (
-                      <SelectItem key={client.id} value={client.id}>
-                        {client.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-type">Project Type (Service)</Label>
-                <Select value={editingProject.type} onValueChange={(value) => setEditingProject({ ...editingProject, type: value as ProjectType })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select project type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {services.map((service) => (
-                      <SelectItem key={service.id} value={service.name}>
-                        {service.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {editingProject.type !== 'BRD' && (
-                <div className="space-y-2">
-                  <Label htmlFor="edit-billing-type">Billing Type</Label>
-                  <Select value={editBillingType} onValueChange={(value) => setEditBillingType(value as 'hourly' | 'project')}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select billing type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="hourly">Hourly</SelectItem>
-                      <SelectItem value="project">Project-based</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-              
-              {editingProject.type === 'BRD' ? (
-                <div className="space-y-2">
-                  <Label htmlFor="edit-project-amount">BRD Amount (₹)</Label>
-                  <Input
-                    id="edit-project-amount"
-                    type="number"
-                    placeholder="BRD project amount"
-                    value={editingProject.project_amount || 0}
-                    onChange={(e) => setEditingProject({ ...editingProject, project_amount: Number(e.target.value) })}
-                  />
-                </div>
-              ) : editBillingType === 'hourly' ? (
-                <div className="space-y-2">
-                  <Label htmlFor="edit-hourly-rate">Hourly Rate (₹)</Label>
-                  <Input
-                    id="edit-hourly-rate"
-                    type="number"
-                    placeholder="Hourly rate"
-                    value={editingProject.hourly_rate}
-                    onChange={(e) => setEditingProject({ ...editingProject, hourly_rate: Number(e.target.value) })}
-                  />
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <Label htmlFor="edit-project-amount">Project Amount (₹)</Label>
-                  <Input
-                    id="edit-project-amount"
-                    type="number"
-                    placeholder="Total project amount"
-                    value={editingProject.project_amount || 0}
-                    onChange={(e) => setEditingProject({ ...editingProject, project_amount: Number(e.target.value) })}
-                  />
-                </div>
-              )}
-
-              {(editBillingType === 'project' || editingProject.type === 'BRD') && (
-                <div className="space-y-2">
-                  <Label htmlFor="edit-deadline">Deadline</Label>
-                  <Input
-                    id="edit-deadline"
-                    type="date"
-                    value={editingProject.deadline || ''}
-                    onChange={(e) => setEditingProject({ ...editingProject, deadline: e.target.value })}
-                  />
-                </div>
-              )}
-
-              <div className="space-y-2">
-                <Label htmlFor="edit-brd-file">Update BRD Document</Label>
-                <Input
-                  id="edit-brd-file"
-                  type="file"
-                  accept=".pdf,.doc,.docx"
-                  onChange={(e) => setEditBrdFile(e.target.files?.[0] || null)}
-                />
-                {editingProject.brd_file_url && (
-                  <div className="text-sm text-gray-600">
-                    Current BRD: 
-                    <Button
-                      variant="link"
-                      className="text-blue-600 p-0 ml-1"
-                      onClick={() => onViewBRD(editingProject.brd_file_url!)}
-                    >
-                      View existing BRD
-                    </Button>
-                  </div>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="edit-start-date">Start Date</Label>
-                <Input
-                  id="edit-start-date"
-                  type="date"
-                  value={editingProject.start_date || ''}
-                  onChange={(e) => setEditingProject({ ...editingProject, start_date: e.target.value })}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="edit-status">Status</Label>
-                <Select value={editingProject.status} onValueChange={(value) => setEditingProject({ ...editingProject, status: value as ProjectStatus })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Active">Active</SelectItem>
-                    <SelectItem value="Completed">Completed</SelectItem>
-                    <SelectItem value="On Hold">On Hold</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <Button onClick={onUpdateProject} className="w-full" disabled={uploadingBRD}>
-                {uploadingBRD ? 'Uploading BRD...' : 'Update Project'}
-              </Button>
+          <div className="space-y-2">
+            <Label htmlFor="client">Client</Label>
+            <Select onValueChange={(value) => setFormData({...formData, client_id: value})}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select a client" defaultValue={formData.client_id} />
+              </SelectTrigger>
+              <SelectContent>
+                {clients.map((client: any) => (
+                  <SelectItem key={client.id} value={client.id}>{client.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="type">Type</Label>
+            <Select onValueChange={(value) => setFormData({...formData, type: value})}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select project type" defaultValue={formData.type} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Hourly">Hourly</SelectItem>
+                <SelectItem value="Fixed Price">Fixed Price</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {formData.type === 'Hourly' && (
+            <div className="space-y-2">
+              <Label htmlFor="hourlyRate">Hourly Rate</Label>
+              <Input
+                id="hourlyRate"
+                type="number"
+                value={formData.hourly_rate}
+                onChange={(e) => setFormData({...formData, hourly_rate: e.target.value})}
+                placeholder="e.g., 50.00"
+              />
             </div>
           )}
-        </DialogContent>
-      </Dialog>
-    </>
+          {formData.type === 'Fixed Price' && (
+            <div className="space-y-2">
+              <Label htmlFor="projectAmount">Project Amount</Label>
+              <Input
+                id="projectAmount"
+                type="number"
+                value={formData.project_amount}
+                onChange={(e) => setFormData({...formData, project_amount: e.target.value})}
+                placeholder="e.g., 5000.00"
+              />
+            </div>
+          )}
+          <div className="space-y-2">
+            <Label htmlFor="startDate">Start Date</Label>
+            <Input
+              id="startDate"
+              type="date"
+              value={formData.start_date}
+              onChange={(e) => setFormData({...formData, start_date: e.target.value})}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="deadline">Deadline</Label>
+            <Input
+              id="deadline"
+              type="date"
+              value={formData.deadline}
+              onChange={(e) => setFormData({...formData, deadline: e.target.value})}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="status">Status</Label>
+            <Select onValueChange={(value) => setFormData({...formData, status: value})}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select status" defaultValue={formData.status} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Active">Active</SelectItem>
+                <SelectItem value="On Hold">On Hold</SelectItem>
+                <SelectItem value="Completed">Completed</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="brdFile">BRD File (Optional)</Label>
+            <Input
+              id="brdFile"
+              type="file"
+              onChange={(e) => {
+                if (e.target.files && e.target.files.length > 0) {
+                  setBrdFile(e.target.files[0]);
+                }
+              }}
+            />
+          </div>
+        </div>
+        <div className="flex justify-end space-x-2 mt-4">
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button onClick={handleSubmit} disabled={createProjectMutation.isPending || updateProjectMutation.isPending}>
+            {editingProject ? 'Update' : 'Create'} Project
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 };
 

@@ -1,7 +1,7 @@
-
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { logProjectCreated, logProjectUpdated, logActivity } from '@/utils/activityLogger';
 
 export const useProjectOperations = () => {
   const queryClient = useQueryClient();
@@ -30,7 +30,7 @@ export const useProjectOperations = () => {
       const { data, error } = await supabase
         .from('projects')
         .insert([projectData])
-        .select()
+        .select('*, clients(name)')
         .single();
       
       if (error) throw error;
@@ -54,9 +54,16 @@ export const useProjectOperations = () => {
       
       return data;
     },
-    onSuccess: () => {
+    onSuccess: async (data) => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       toast.success('Project created successfully!');
+      
+      // Log activity
+      await logProjectCreated(
+        data.name,
+        data.id,
+        data.clients?.name || 'Unknown Client'
+      );
     },
     onError: (error) => {
       toast.error('Failed to create project: ' + error.message);
@@ -82,15 +89,23 @@ export const useProjectOperations = () => {
         .from('projects')
         .update(updates)
         .eq('id', id)
-        .select()
+        .select('*, clients(name)')
         .single();
       
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSuccess: async (data) => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       toast.success('Project updated successfully!');
+      
+      // Log activity
+      await logProjectUpdated(
+        data.name,
+        data.id,
+        'project details',
+        data.clients?.name || 'Unknown Client'
+      );
     },
     onError: (error) => {
       toast.error('Failed to update project: ' + error.message);
@@ -101,6 +116,13 @@ export const useProjectOperations = () => {
   const deleteProjectMutation = useMutation({
     mutationFn: async (id: string) => {
       console.log('Starting project deletion for ID:', id);
+      
+      // Get project details for logging before deletion
+      const { data: projectData } = await supabase
+        .from('projects')
+        .select('name, clients(name)')
+        .eq('id', id)
+        .single();
       
       // Step 1: Get all tasks for this project
       const { data: projectTasks, error: tasksError } = await supabase
@@ -216,9 +238,21 @@ export const useProjectOperations = () => {
       }
       console.log('Project deleted successfully');
     },
-    onSuccess: () => {
+    onSuccess: async ({ id, projectData }) => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       toast.success('Project and all related data deleted successfully!');
+      
+      // Log activity
+      if (projectData) {
+        await logActivity({
+          action_type: 'deleted',
+          entity_type: 'project',
+          entity_id: id,
+          entity_name: projectData.name,
+          description: `Deleted project: ${projectData.name} and all related data`,
+          comment: `Client: ${projectData.clients?.name || 'Unknown Client'}`
+        });
+      }
     },
     onError: (error) => {
       console.error('Project deletion failed:', error);

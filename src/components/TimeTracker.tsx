@@ -1,95 +1,67 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Play, Square, Clock } from 'lucide-react';
+import { toast } from 'sonner';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { toast } from 'sonner';
-import { useAuth } from '@/contexts/AuthContext';
-
-interface Task {
-  id: string;
-  name: string;
-}
+import { logTimerStarted, logTimerStopped } from '@/utils/activityLogger';
 
 interface TimeTrackerProps {
-  task: Task;
-  onSuccess: () => void;
-}
-
-interface ActiveTimer {
-  id: string;
   taskId: string;
-  startTime: Date;
-  entryId: string;
+  taskName: string;
+  projectName?: string;
+  employeeId: string;
+  initialTimeEntry: any;
 }
 
-const TimeTracker: React.FC<TimeTrackerProps> = ({ task, onSuccess }) => {
-  const { user } = useAuth();
-  const queryClient = useQueryClient();
-  const [activeTimer, setActiveTimer] = useState<ActiveTimer | null>(null);
+interface TimeEntry {
+  id: string;
+  task_id: string;
+  employee_id: string;
+  start_time: string;
+  end_time: string | null;
+  duration_minutes: number | null;
+}
+
+const TimeTracker = ({ taskId, taskName, projectName, employeeId, initialTimeEntry }: TimeTrackerProps) => {
+  const [isActive, setIsActive] = useState(false);
+  const [startTime, setStartTime] = useState<Date | null>(null);
   const [elapsedTime, setElapsedTime] = useState(0);
+  const [activeEntry, setActiveEntry] = useState<TimeEntry | null>(initialTimeEntry);
+  const queryClient = useQueryClient();
 
-  // Check if there's an existing active timer for this task
   useEffect(() => {
-    const checkActiveTimer = async () => {
-      const { data, error } = await supabase
-        .from('time_entries')
-        .select('*')
-        .eq('task_id', task.id)
-        .is('end_time', null)
-        .order('start_time', { ascending: false })
-        .limit(1);
-      
-      if (data && data.length > 0) {
-        const entry = data[0];
-        setActiveTimer({
-          id: entry.id,
-          taskId: task.id,
-          startTime: new Date(entry.start_time),
-          entryId: entry.id
-        });
-      }
-    };
+    setActiveEntry(initialTimeEntry);
+    if (initialTimeEntry) {
+      setIsActive(true);
+      setStartTime(new Date(initialTimeEntry.start_time));
+    }
+  }, [initialTimeEntry]);
 
-    checkActiveTimer();
-  }, [task.id]);
-
-  // Update elapsed time every second when timer is active
   useEffect(() => {
-    let interval: NodeJS.Timeout;
-    
-    if (activeTimer) {
-      interval = setInterval(() => {
+    let intervalId: NodeJS.Timeout;
+
+    if (isActive && startTime) {
+      intervalId = setInterval(() => {
         const now = new Date();
-        const elapsed = Math.floor((now.getTime() - activeTimer.startTime.getTime()) / 1000);
+        const elapsed = Math.floor((now.getTime() - startTime.getTime()) / 1000);
         setElapsedTime(elapsed);
       }, 1000);
+    } else {
+      clearInterval(intervalId);
     }
-    
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [activeTimer]);
+
+    return () => clearInterval(intervalId);
+  }, [isActive, startTime]);
 
   const startTimerMutation = useMutation({
     mutationFn: async () => {
-      // First, get current user's employee record
-      const { data: employee, error: empError } = await supabase
-        .from('employees')
-        .select('id')
-        .eq('email', user?.email)
-        .single();
-      
-      if (empError || !employee) {
-        throw new Error('Employee record not found. Please contact admin.');
-      }
-
       const { data, error } = await supabase
         .from('time_entries')
         .insert([{
-          task_id: task.id,
-          employee_id: employee.id,
+          task_id: taskId,
+          employee_id: employeeId,
           start_time: new Date().toISOString()
         }])
         .select()
@@ -98,16 +70,15 @@ const TimeTracker: React.FC<TimeTrackerProps> = ({ task, onSuccess }) => {
       if (error) throw error;
       return data;
     },
-    onSuccess: (data) => {
-      setActiveTimer({
-        id: data.id,
-        taskId: task.id,
-        startTime: new Date(data.start_time),
-        entryId: data.id
-      });
-      setElapsedTime(0);
+    onSuccess: async (data) => {
+      setActiveEntry(data);
+      setStartTime(new Date(data.start_time));
+      queryClient.invalidateQueries({ queryKey: ['time-entries'] });
+      queryClient.invalidateQueries({ queryKey: ['running-tasks'] });
       toast.success('Timer started!');
-      onSuccess();
+      
+      // Log activity
+      await logTimerStarted(taskName, taskId, projectName);
     },
     onError: (error) => {
       toast.error('Failed to start timer: ' + error.message);
@@ -116,10 +87,10 @@ const TimeTracker: React.FC<TimeTrackerProps> = ({ task, onSuccess }) => {
 
   const stopTimerMutation = useMutation({
     mutationFn: async () => {
-      if (!activeTimer) throw new Error('No active timer');
+      if (!activeEntry) throw new Error('No active timer');
       
       const endTime = new Date();
-      const durationMinutes = Math.floor((endTime.getTime() - activeTimer.startTime.getTime()) / 60000);
+      const durationMinutes = Math.round((endTime.getTime() - startTime!.getTime()) / 60000);
       
       const { data, error } = await supabase
         .from('time_entries')
@@ -127,67 +98,83 @@ const TimeTracker: React.FC<TimeTrackerProps> = ({ task, onSuccess }) => {
           end_time: endTime.toISOString(),
           duration_minutes: durationMinutes
         })
-        .eq('id', activeTimer.entryId)
+        .eq('id', activeEntry.id)
         .select()
         .single();
       
       if (error) throw error;
-      return data;
+      return { data, durationMinutes };
     },
-    onSuccess: () => {
-      setActiveTimer(null);
+    onSuccess: async ({ data, durationMinutes }) => {
+      const hours = Math.floor(durationMinutes / 60);
+      const minutes = durationMinutes % 60;
+      const durationString = `${hours}h ${minutes}m`;
+      
+      setActiveEntry(null);
+      setStartTime(null);
       setElapsedTime(0);
-      toast.success('Timer stopped!');
-      onSuccess();
+      queryClient.invalidateQueries({ queryKey: ['time-entries'] });
+      queryClient.invalidateQueries({ queryKey: ['running-tasks'] });
+      toast.success(`Timer stopped! Duration: ${durationString}`);
+      
+      // Log activity
+      await logTimerStopped(taskName, taskId, durationString, projectName);
     },
     onError: (error) => {
       toast.error('Failed to stop timer: ' + error.message);
     }
   });
 
-  const formatTime = (seconds: number) => {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-
   const handleStartStop = () => {
-    if (activeTimer) {
+    if (isActive) {
       stopTimerMutation.mutate();
+      setIsActive(false);
     } else {
       startTimerMutation.mutate();
+      setIsActive(true);
     }
   };
 
+  const formatElapsedTime = () => {
+    const hours = Math.floor(elapsedTime / 3600);
+    const minutes = Math.floor((elapsedTime % 3600) / 60);
+    const seconds = elapsedTime % 60;
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  };
+
   return (
-    <div className="flex items-center space-x-2">
-      <Button
-        size="sm"
-        variant={activeTimer ? "destructive" : "outline"}
-        onClick={handleStartStop}
-        disabled={startTimerMutation.isPending || stopTimerMutation.isPending}
-      >
-        {activeTimer ? (
-          <>
-            <Square className="h-4 w-4 mr-1" />
-            Stop
-          </>
-        ) : (
-          <>
-            <Play className="h-4 w-4 mr-1" />
-            Start
-          </>
-        )}
-      </Button>
-      
-      {activeTimer && (
-        <div className="flex items-center text-sm text-blue-600 font-mono">
-          <Clock className="h-4 w-4 mr-1" />
-          {formatTime(elapsedTime)}
+    <Card>
+      <CardHeader>
+        <CardTitle>Time Tracker</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="flex items-center justify-between">
+          <div className="text-4xl font-bold">
+            {formatElapsedTime()}
+          </div>
+          <Button
+            variant="outline"
+            onClick={handleStartStop}
+            disabled={startTimerMutation.isPending || stopTimerMutation.isPending}
+          >
+            {isActive ? (
+              <>
+                <Square className="mr-2 h-4 w-4" />
+                Stop
+              </>
+            ) : (
+              <>
+                <Play className="mr-2 h-4 w-4" />
+                Start
+              </>
+            )}
+          </Button>
         </div>
-      )}
-    </div>
+        {projectName && (
+          <p className="text-sm text-gray-500 mt-2">Project: {projectName}</p>
+        )}
+      </CardContent>
+    </Card>
   );
 };
 
