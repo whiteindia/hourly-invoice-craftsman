@@ -93,8 +93,6 @@ const Tasks = () => {
   const [editingTask, setEditingTask] = useState<TaskData | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [isCommentDialogOpen, setIsCommentDialogOpen] = useState(false);
-  const [selectedTaskForComment, setSelectedTaskForComment] = useState<TaskData | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedProject, setSelectedProject] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -900,21 +898,6 @@ const Tasks = () => {
             )}
           </DialogContent>
         </Dialog>
-
-        <TaskCommentDialog
-          isOpen={isCommentDialogOpen}
-          onOpenChange={(open) => {
-            setIsCommentDialogOpen(open);
-            if (!open) {
-              setSelectedTaskForComment(null);
-            }
-          }}
-          task={selectedTaskForComment}
-          onSuccess={() => {
-            // Refresh tasks when comment is added successfully
-            queryClient.invalidateQueries({ queryKey: ['tasks'] });
-          }}
-        />
       </div>
     </Navigation>
   );
