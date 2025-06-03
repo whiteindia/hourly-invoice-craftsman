@@ -9,6 +9,42 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      activity_feed: {
+        Row: {
+          action_type: string
+          comment: string | null
+          created_at: string
+          description: string
+          entity_id: string | null
+          entity_name: string
+          entity_type: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          action_type: string
+          comment?: string | null
+          created_at?: string
+          description: string
+          entity_id?: string | null
+          entity_name: string
+          entity_type: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          action_type?: string
+          comment?: string | null
+          created_at?: string
+          description?: string
+          entity_id?: string | null
+          entity_name?: string
+          entity_type?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       clients: {
         Row: {
           company: string | null
@@ -293,6 +329,7 @@ export type Database = {
           brd_file_url: string | null
           client_id: string
           created_at: string
+          deadline: string | null
           hourly_rate: number
           id: string
           name: string
@@ -307,6 +344,7 @@ export type Database = {
           brd_file_url?: string | null
           client_id: string
           created_at?: string
+          deadline?: string | null
           hourly_rate: number
           id?: string
           name: string
@@ -321,6 +359,7 @@ export type Database = {
           brd_file_url?: string | null
           client_id?: string
           created_at?: string
+          deadline?: string | null
           hourly_rate?: number
           id?: string
           name?: string
