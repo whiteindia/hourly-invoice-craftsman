@@ -2,8 +2,9 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { ChevronDown, ChevronRight, Calendar, User, Building } from 'lucide-react';
+import { ChevronDown, ChevronRight, Calendar, Edit, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import TaskKanban from '@/components/TaskKanban';
 
@@ -39,6 +40,8 @@ interface Sprint {
 interface SprintCardProps {
   sprint: Sprint;
   onTaskStatusChange: (taskId: string, newStatus: string, sprintId: string) => void;
+  onEdit: () => void;
+  onDelete: () => void;
   getStatusIcon: (status: string) => React.ReactNode;
   getStatusColor: (status: string) => string;
 }
@@ -46,6 +49,8 @@ interface SprintCardProps {
 const SprintCard: React.FC<SprintCardProps> = ({
   sprint,
   onTaskStatusChange,
+  onEdit,
+  onDelete,
   getStatusIcon,
   getStatusColor
 }) => {
@@ -81,6 +86,28 @@ const SprintCard: React.FC<SprintCardProps> = ({
                 </div>
               </div>
               <div className="flex items-center space-x-3">
+                <div className="flex items-center space-x-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onEdit();
+                    }}
+                  >
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDelete();
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
                 <div className="text-sm text-gray-500">
                   {progressPercentage.toFixed(0)}% complete
                 </div>

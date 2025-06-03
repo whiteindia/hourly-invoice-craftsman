@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import {
@@ -13,7 +13,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from '@/hooks/use-toast';
 import { Calendar } from '@/components/ui/calendar';
@@ -35,16 +34,56 @@ interface Task {
   };
 }
 
+interface Sprint {
+  id: string;
+  title: string;
+  deadline: string;
+  status: 'Not Started' | 'In Progress' | 'Completed';
+  created_at: string;
+  updated_at: string;
+}
+
 interface SprintDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  editingSprint?: Sprint | null;
   onSuccess: () => void;
 }
 
-const SprintDialog: React.FC<SprintDialogProps> = ({ open, onOpenChange, onSuccess }) => {
+const SprintDialog: React.FC<SprintDialogProps> = ({ 
+  open, 
+  onOpenChange, 
+  editingSprint, 
+  onSuccess 
+}) => {
   const [title, setTitle] = useState('');
   const [deadline, setDeadline] = useState<Date>();
   const [selectedTasks, setSelectedTasks] = useState<string[]>([]);
+
+  // Reset form when dialog opens/closes or editing sprint changes
+  useEffect(() => {
+    if (open) {
+      if (editingSprint) {
+        setTitle(editingSprint.title);
+        setDeadline(new Date(editingSprint.deadline));
+        // Load existing tasks for this sprint
+        loadSprintTasks(editingSprint.id);
+      } else {
+        resetForm();
+      }
+    }
+  }, [open, editingSprint]);
+
+  const loadSprintTasks = async (sprintId: string) => {
+    const { data: sprintTasks, error } = await supabase
+      .from('sprint_tasks')
+      .select('task_id')
+      .eq('sprint_id', sprintId);
+    
+    if (!error && sprintTasks) {
+      setSelectedTasks(sprintTasks.map(st => st.task_id));
+    }
+  };
 
   // Fetch available tasks
   const { data: tasks = [] } = useQuery({
@@ -111,10 +150,64 @@ const SprintDialog: React.FC<SprintDialogProps> = ({ open, onOpenChange, onSucce
       resetForm();
       onSuccess();
     },
-    onError: (error) => {
+    onError: () => {
       toast({
         title: "Error",
         description: "Failed to create sprint",
+        variant: "destructive",
+      });
+    }
+  });
+
+  const updateSprintMutation = useMutation({
+    mutationFn: async (sprintData: { id: string; title: string; deadline: string; taskIds: string[] }) => {
+      // Update sprint
+      const { error: sprintError } = await supabase
+        .from('sprints')
+        .update({
+          title: sprintData.title,
+          deadline: sprintData.deadline,
+        })
+        .eq('id', sprintData.id);
+
+      if (sprintError) throw sprintError;
+
+      // Remove existing sprint tasks
+      const { error: deleteError } = await supabase
+        .from('sprint_tasks')
+        .delete()
+        .eq('sprint_id', sprintData.id);
+
+      if (deleteError) throw deleteError;
+
+      // Add new tasks to sprint
+      if (sprintData.taskIds.length > 0) {
+        const sprintTasks = sprintData.taskIds.map(taskId => ({
+          sprint_id: sprintData.id,
+          task_id: taskId
+        }));
+
+        const { error: tasksError } = await supabase
+          .from('sprint_tasks')
+          .insert(sprintTasks);
+
+        if (tasksError) throw tasksError;
+      }
+
+      return sprintData;
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Sprint updated successfully",
+      });
+      resetForm();
+      onSuccess();
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to update sprint",
         variant: "destructive",
       });
     }
@@ -147,11 +240,20 @@ const SprintDialog: React.FC<SprintDialogProps> = ({ open, onOpenChange, onSucce
       return;
     }
 
-    createSprintMutation.mutate({
+    const sprintData = {
       title: title.trim(),
       deadline: format(deadline, 'yyyy-MM-dd'),
       taskIds: selectedTasks
-    });
+    };
+
+    if (editingSprint) {
+      updateSprintMutation.mutate({
+        id: editingSprint.id,
+        ...sprintData
+      });
+    } else {
+      createSprintMutation.mutate(sprintData);
+    }
   };
 
   const handleTaskToggle = (taskId: string) => {
@@ -162,13 +264,17 @@ const SprintDialog: React.FC<SprintDialogProps> = ({ open, onOpenChange, onSucce
     );
   };
 
+  const isLoading = createSprintMutation.isPending || updateSprintMutation.isPending;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Create New Sprint</DialogTitle>
+          <DialogTitle>
+            {editingSprint ? 'Edit Sprint' : 'Create New Sprint'}
+          </DialogTitle>
           <DialogDescription>
-            Create a new sprint and assign tasks to it.
+            {editingSprint ? 'Update sprint details and task assignments.' : 'Create a new sprint and assign tasks to it.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -253,9 +359,9 @@ const SprintDialog: React.FC<SprintDialogProps> = ({ open, onOpenChange, onSucce
             </Button>
             <Button
               type="submit"
-              disabled={createSprintMutation.isPending}
+              disabled={isLoading}
             >
-              {createSprintMutation.isPending ? 'Creating...' : 'Create Sprint'}
+              {isLoading ? (editingSprint ? 'Updating...' : 'Creating...') : (editingSprint ? 'Update Sprint' : 'Create Sprint')}
             </Button>
           </DialogFooter>
         </form>
