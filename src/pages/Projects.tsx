@@ -122,7 +122,7 @@ const Projects = () => {
       if (error) throw error;
       
       // Upload BRD file if provided
-      if (newProject.brd_file && newProject.billing_type === 'project') {
+      if (newProject.brd_file) {
         try {
           setUploadingBRD(true);
           const brdUrl = await uploadBRDFile(newProject.brd_file, data.id);
@@ -168,7 +168,7 @@ const Projects = () => {
   const updateProjectMutation = useMutation({
     mutationFn: async ({ id, ...updates }: { id: string } & any) => {
       // Handle BRD file upload for edit
-      if (editBrdFile && editBillingType === 'project') {
+      if (editBrdFile) {
         try {
           setUploadingBRD(true);
           const brdUrl = await uploadBRDFile(editBrdFile, id);
@@ -228,8 +228,8 @@ const Projects = () => {
       name: newProject.name,
       client_id: newProject.client_id,
       type: newProject.type,
-      hourly_rate: newProject.hourly_rate,
-      project_amount: newProject.billing_type === 'project' ? newProject.project_amount : null,
+      hourly_rate: newProject.type === 'BRD' ? 0 : newProject.hourly_rate,
+      project_amount: newProject.billing_type === 'project' || newProject.type === 'BRD' ? newProject.project_amount : null,
       start_date: newProject.start_date || null,
       deadline: newProject.billing_type === 'project' && newProject.deadline ? newProject.deadline : null
     };
@@ -243,8 +243,8 @@ const Projects = () => {
         name: editingProject.name,
         client_id: editingProject.client_id,
         type: editingProject.type,
-        hourly_rate: editingProject.hourly_rate,
-        project_amount: editBillingType === 'project' ? editingProject.project_amount : null,
+        hourly_rate: editingProject.type === 'BRD' ? 0 : editingProject.hourly_rate,
+        project_amount: editBillingType === 'project' || editingProject.type === 'BRD' ? editingProject.project_amount : null,
         start_date: editingProject.start_date || null,
         deadline: editBillingType === 'project' && editingProject.deadline ? editingProject.deadline : null
       };
@@ -339,20 +339,33 @@ const Projects = () => {
                   </Select>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="billing_type">Billing Type</Label>
-                  <Select value={newProject.billing_type} onValueChange={(value) => setNewProject({ ...newProject, billing_type: value as 'hourly' | 'project' })}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select billing type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="hourly">Hourly</SelectItem>
-                      <SelectItem value="project">Project-based</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                {newProject.type !== 'BRD' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="billing_type">Billing Type</Label>
+                    <Select value={newProject.billing_type} onValueChange={(value) => setNewProject({ ...newProject, billing_type: value as 'hourly' | 'project' })}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select billing type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="hourly">Hourly</SelectItem>
+                        <SelectItem value="project">Project-based</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 
-                {newProject.billing_type === 'hourly' && (
+                {newProject.type === 'BRD' ? (
+                  <div className="space-y-2">
+                    <Label htmlFor="project_amount">BRD Amount (₹)</Label>
+                    <Input
+                      id="project_amount"
+                      type="number"
+                      placeholder="BRD project amount"
+                      value={newProject.project_amount}
+                      onChange={(e) => setNewProject({ ...newProject, project_amount: Number(e.target.value) })}
+                    />
+                  </div>
+                ) : newProject.billing_type === 'hourly' ? (
                   <div className="space-y-2">
                     <Label htmlFor="hourly_rate">Hourly Rate (₹)</Label>
                     <Input
@@ -363,40 +376,40 @@ const Projects = () => {
                       onChange={(e) => setNewProject({ ...newProject, hourly_rate: Number(e.target.value) })}
                     />
                   </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Label htmlFor="project_amount">Project Amount (₹)</Label>
+                    <Input
+                      id="project_amount"
+                      type="number"
+                      placeholder="Total project amount"
+                      value={newProject.project_amount}
+                      onChange={(e) => setNewProject({ ...newProject, project_amount: Number(e.target.value) })}
+                    />
+                  </div>
                 )}
 
-                {newProject.billing_type === 'project' && (
-                  <>
-                    <div className="space-y-2">
-                      <Label htmlFor="project_amount">Project Amount (₹)</Label>
-                      <Input
-                        id="project_amount"
-                        type="number"
-                        placeholder="Total project amount"
-                        value={newProject.project_amount}
-                        onChange={(e) => setNewProject({ ...newProject, project_amount: Number(e.target.value) })}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="deadline">Deadline</Label>
-                      <Input
-                        id="deadline"
-                        type="date"
-                        value={newProject.deadline}
-                        onChange={(e) => setNewProject({ ...newProject, deadline: e.target.value })}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="brd_file">BRD Document</Label>
-                      <Input
-                        id="brd_file"
-                        type="file"
-                        accept=".pdf,.doc,.docx"
-                        onChange={(e) => setNewProject({ ...newProject, brd_file: e.target.files?.[0] || null })}
-                      />
-                    </div>
-                  </>
+                {(newProject.billing_type === 'project' || newProject.type === 'BRD') && (
+                  <div className="space-y-2">
+                    <Label htmlFor="deadline">Deadline</Label>
+                    <Input
+                      id="deadline"
+                      type="date"
+                      value={newProject.deadline}
+                      onChange={(e) => setNewProject({ ...newProject, deadline: e.target.value })}
+                    />
+                  </div>
                 )}
+
+                <div className="space-y-2">
+                  <Label htmlFor="brd_file">BRD Document</Label>
+                  <Input
+                    id="brd_file"
+                    type="file"
+                    accept=".pdf,.doc,.docx"
+                    onChange={(e) => setNewProject({ ...newProject, brd_file: e.target.files?.[0] || null })}
+                  />
+                </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="start_date">Start Date</Label>
@@ -567,20 +580,33 @@ const Projects = () => {
                   </Select>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="edit-billing-type">Billing Type</Label>
-                  <Select value={editBillingType} onValueChange={(value) => setEditBillingType(value as 'hourly' | 'project')}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select billing type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="hourly">Hourly</SelectItem>
-                      <SelectItem value="project">Project-based</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                {editingProject.type !== 'BRD' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-billing-type">Billing Type</Label>
+                    <Select value={editBillingType} onValueChange={(value) => setEditBillingType(value as 'hourly' | 'project')}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select billing type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="hourly">Hourly</SelectItem>
+                        <SelectItem value="project">Project-based</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 
-                {editBillingType === 'hourly' && (
+                {editingProject.type === 'BRD' ? (
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-project-amount">BRD Amount (₹)</Label>
+                    <Input
+                      id="edit-project-amount"
+                      type="number"
+                      placeholder="BRD project amount"
+                      value={editingProject.project_amount || 0}
+                      onChange={(e) => setEditingProject({ ...editingProject, project_amount: Number(e.target.value) })}
+                    />
+                  </div>
+                ) : editBillingType === 'hourly' ? (
                   <div className="space-y-2">
                     <Label htmlFor="edit-hourly-rate">Hourly Rate (₹)</Label>
                     <Input
@@ -591,52 +617,52 @@ const Projects = () => {
                       onChange={(e) => setEditingProject({ ...editingProject, hourly_rate: Number(e.target.value) })}
                     />
                   </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-project-amount">Project Amount (₹)</Label>
+                    <Input
+                      id="edit-project-amount"
+                      type="number"
+                      placeholder="Total project amount"
+                      value={editingProject.project_amount || 0}
+                      onChange={(e) => setEditingProject({ ...editingProject, project_amount: Number(e.target.value) })}
+                    />
+                  </div>
                 )}
 
-                {editBillingType === 'project' && (
-                  <>
-                    <div className="space-y-2">
-                      <Label htmlFor="edit-project-amount">Project Amount (₹)</Label>
-                      <Input
-                        id="edit-project-amount"
-                        type="number"
-                        placeholder="Total project amount"
-                        value={editingProject.project_amount || 0}
-                        onChange={(e) => setEditingProject({ ...editingProject, project_amount: Number(e.target.value) })}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="edit-deadline">Deadline</Label>
-                      <Input
-                        id="edit-deadline"
-                        type="date"
-                        value={editingProject.deadline || ''}
-                        onChange={(e) => setEditingProject({ ...editingProject, deadline: e.target.value })}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="edit-brd-file">Update BRD Document</Label>
-                      <Input
-                        id="edit-brd-file"
-                        type="file"
-                        accept=".pdf,.doc,.docx"
-                        onChange={(e) => setEditBrdFile(e.target.files?.[0] || null)}
-                      />
-                      {editingProject.brd_file_url && (
-                        <div className="text-sm text-gray-600">
-                          Current BRD: 
-                          <Button
-                            variant="link"
-                            className="text-blue-600 p-0 ml-1"
-                            onClick={() => openBRDFile(editingProject.brd_file_url!)}
-                          >
-                            View existing BRD
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  </>
+                {(editBillingType === 'project' || editingProject.type === 'BRD') && (
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-deadline">Deadline</Label>
+                    <Input
+                      id="edit-deadline"
+                      type="date"
+                      value={editingProject.deadline || ''}
+                      onChange={(e) => setEditingProject({ ...editingProject, deadline: e.target.value })}
+                    />
+                  </div>
                 )}
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit-brd-file">Update BRD Document</Label>
+                  <Input
+                    id="edit-brd-file"
+                    type="file"
+                    accept=".pdf,.doc,.docx"
+                    onChange={(e) => setEditBrdFile(e.target.files?.[0] || null)}
+                  />
+                  {editingProject.brd_file_url && (
+                    <div className="text-sm text-gray-600">
+                      Current BRD: 
+                      <Button
+                        variant="link"
+                        className="text-blue-600 p-0 ml-1"
+                        onClick={() => openBRDFile(editingProject.brd_file_url!)}
+                      >
+                        View existing BRD
+                      </Button>
+                    </div>
+                  )}
+                </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="edit-start-date">Start Date</Label>
