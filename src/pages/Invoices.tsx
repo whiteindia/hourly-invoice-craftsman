@@ -14,6 +14,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { Database } from '@/integrations/supabase/types';
 import Navigation from '@/components/Navigation';
+import { logActivity } from '@/utils/activityLogger';
 
 type InvoiceStatus = Database['public']['Enums']['invoice_status'];
 
@@ -208,6 +209,16 @@ const Invoices = () => {
       
       if (updateTasksError) throw updateTasksError;
       
+      // Log activity
+      await logActivity({
+        action_type: 'created',
+        entity_type: 'invoice',
+        entity_id: invoiceId,
+        entity_name: invoiceId,
+        description: `Created invoice ${invoiceId} for ${project?.clients.name} - ₹${totalAmount}`,
+        comment: `${totalHours} hours at ₹${rate}/hr`
+      });
+      
       return invoice;
     },
     onSuccess: () => {
@@ -233,6 +244,17 @@ const Invoices = () => {
         .single();
       
       if (error) throw error;
+
+      // Log activity
+      await logActivity({
+        action_type: 'updated',
+        entity_type: 'invoice',
+        entity_id: id,
+        entity_name: id,
+        description: `Updated invoice ${id} status to ${status}`,
+        comment: `Status changed from previous to ${status}`
+      });
+      
       return data;
     },
     onSuccess: (data) => {

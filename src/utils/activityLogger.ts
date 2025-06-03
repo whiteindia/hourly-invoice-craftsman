@@ -51,54 +51,58 @@ export const logTaskUpdate = async (taskName: string, taskId: string, action: st
   });
 };
 
-export const logTaskCreated = async (taskName: string, taskId: string, projectName: string) => {
+export const logTaskCreated = async (taskName: string, taskId: string, projectName: string, clientName?: string) => {
   await logActivity({
     action_type: 'created',
     entity_type: 'task',
     entity_id: taskId,
     entity_name: taskName,
-    description: `Created new task: ${taskName} in project ${projectName}`
+    description: `Created new task: ${taskName} in project ${projectName}${clientName ? ` for ${clientName}` : ''}`,
+    comment: `Project: ${projectName}`
   });
 };
 
-export const logTaskStatusChanged = async (taskName: string, taskId: string, newStatus: string, oldStatus: string) => {
+export const logTaskStatusChanged = async (taskName: string, taskId: string, newStatus: string, oldStatus: string, projectName?: string) => {
   await logActivity({
     action_type: `status_changed_to_${newStatus.toLowerCase().replace(' ', '_')}`,
     entity_type: 'task',
     entity_id: taskId,
     entity_name: taskName,
-    description: `Changed task status from ${oldStatus} to ${newStatus}: ${taskName}`
+    description: `Changed task status from ${oldStatus} to ${newStatus}: ${taskName}`,
+    comment: projectName ? `Project: ${projectName}` : undefined
   });
 };
 
-export const logTimeEntry = async (taskName: string, taskId: string, duration: string, comment?: string) => {
+export const logTimeEntry = async (taskName: string, taskId: string, duration: string, comment?: string, projectName?: string) => {
   await logActivity({
     action_type: 'logged_time',
     entity_type: 'task',
     entity_id: taskId,
     entity_name: taskName,
     description: `Logged ${duration} on task: ${taskName}`,
-    comment
+    comment: comment || (projectName ? `Project: ${projectName}` : undefined)
   });
 };
 
-export const logTimerStarted = async (taskName: string, taskId: string) => {
+export const logTimerStarted = async (taskName: string, taskId: string, projectName?: string) => {
   await logActivity({
     action_type: 'timer_started',
     entity_type: 'task',
     entity_id: taskId,
     entity_name: taskName,
-    description: `Started timer for task: ${taskName}`
+    description: `Started timer for task: ${taskName}`,
+    comment: projectName ? `Project: ${projectName}` : undefined
   });
 };
 
-export const logTimerStopped = async (taskName: string, taskId: string, duration: string) => {
+export const logTimerStopped = async (taskName: string, taskId: string, duration: string, projectName?: string) => {
   await logActivity({
     action_type: 'timer_stopped',
     entity_type: 'task',
     entity_id: taskId,
     entity_name: taskName,
-    description: `Stopped timer for task: ${taskName} (${duration})`
+    description: `Stopped timer for task: ${taskName} (${duration})`,
+    comment: projectName ? `Project: ${projectName}` : undefined
   });
 };
 
@@ -111,13 +115,13 @@ export const logUserLogin = async (userEmail: string) => {
   });
 };
 
-export const logProjectActivity = async (projectName: string, projectId: string, action: string, comment?: string) => {
+export const logProjectActivity = async (projectName: string, projectId: string, action: string, comment?: string, clientName?: string) => {
   await logActivity({
     action_type: action,
     entity_type: 'project',
     entity_id: projectId,
     entity_name: projectName,
-    description: `${action} project: ${projectName}`,
+    description: `${action} project: ${projectName}${clientName ? ` for ${clientName}` : ''}`,
     comment
   });
 };
@@ -128,7 +132,19 @@ export const logProjectCreated = async (projectName: string, projectId: string, 
     entity_type: 'project',
     entity_id: projectId,
     entity_name: projectName,
-    description: `Created new project: ${projectName} for client ${clientName}`
+    description: `Created new project: ${projectName} for client ${clientName}`,
+    comment: `Client: ${clientName}`
+  });
+};
+
+export const logProjectUpdated = async (projectName: string, projectId: string, updateType: string, clientName?: string) => {
+  await logActivity({
+    action_type: 'updated',
+    entity_type: 'project',
+    entity_id: projectId,
+    entity_name: projectName,
+    description: `Updated project: ${projectName} - ${updateType}`,
+    comment: clientName ? `Client: ${clientName}` : undefined
   });
 };
 
@@ -140,5 +156,61 @@ export const logClientActivity = async (clientName: string, clientId: string, ac
     entity_name: clientName,
     description: `${action} client: ${clientName}`,
     comment
+  });
+};
+
+export const logClientCreated = async (clientName: string, clientId: string, company?: string) => {
+  await logActivity({
+    action_type: 'created',
+    entity_type: 'client',
+    entity_id: clientId,
+    entity_name: clientName,
+    description: `Created new client: ${clientName}${company ? ` (${company})` : ''}`,
+    comment: company ? `Company: ${company}` : undefined
+  });
+};
+
+export const logClientUpdated = async (clientName: string, clientId: string, updateType: string) => {
+  await logActivity({
+    action_type: 'updated',
+    entity_type: 'client',
+    entity_id: clientId,
+    entity_name: clientName,
+    description: `Updated client: ${clientName} - ${updateType}`
+  });
+};
+
+// Payment specific logging
+export const logPaymentCreated = async (amount: number, clientName: string, invoiceId: string, paymentId: string) => {
+  await logActivity({
+    action_type: 'created',
+    entity_type: 'payment',
+    entity_id: paymentId,
+    entity_name: `Payment for ${clientName}`,
+    description: `Recorded payment of ₹${amount} for invoice ${invoiceId}`,
+    comment: `Client: ${clientName}, Invoice: ${invoiceId}`
+  });
+};
+
+// Invoice specific logging
+export const logInvoiceCreated = async (invoiceId: string, clientName: string, projectName: string, amount: number, hours: number) => {
+  await logActivity({
+    action_type: 'created',
+    entity_type: 'invoice',
+    entity_id: invoiceId,
+    entity_name: invoiceId,
+    description: `Created invoice ${invoiceId} for ${clientName} - ₹${amount}`,
+    comment: `Project: ${projectName}, ${hours} hours`
+  });
+};
+
+export const logInvoiceStatusChanged = async (invoiceId: string, newStatus: string, oldStatus: string, clientName?: string) => {
+  await logActivity({
+    action_type: 'updated',
+    entity_type: 'invoice',
+    entity_id: invoiceId,
+    entity_name: invoiceId,
+    description: `Updated invoice ${invoiceId} status from ${oldStatus} to ${newStatus}`,
+    comment: clientName ? `Client: ${clientName}` : undefined
   });
 };

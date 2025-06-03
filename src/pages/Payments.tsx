@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -13,6 +12,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import Navigation from '@/components/Navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { logActivity } from '@/utils/activityLogger';
 
 interface Payment {
   id: string;
@@ -172,6 +172,15 @@ const Payments = () => {
       
       if (updateError) throw updateError;
 
+      // Log activity
+      await logActivity({
+        action_type: 'created',
+        entity_type: 'payment',
+        entity_id: data.id,
+        entity_name: `Payment for ${paymentData.client_name}`,
+        description: `Recorded payment of ₹${paymentData.amount} for invoice ${paymentData.invoice_id}`
+      });
+
       return data;
     },
     onSuccess: () => {
@@ -228,13 +237,11 @@ const Payments = () => {
       return;
     }
     
+    const selectedClient = clients.find(c => c.id === newPayment.client_id);
+    
     addPaymentMutation.mutate({
-      client_id: newPayment.client_id,
-      project_id: newPayment.project_id,
-      invoice_id: newPayment.invoice_id,
-      amount: newPayment.amount,
-      payment_method: newPayment.payment_method,
-      payment_date: newPayment.payment_date
+      ...newPayment,
+      client_name: selectedClient?.name || 'Unknown Client'
     });
   };
 
