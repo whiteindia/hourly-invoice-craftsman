@@ -18,7 +18,6 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import Navigation from '@/components/Navigation';
 import { useNavigate } from 'react-router-dom';
-import ActivityFeedTest from '@/components/ActivityFeedTest';
 
 const Index = () => {
   const navigate = useNavigate();
@@ -261,9 +260,6 @@ const Index = () => {
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
         </div>
-
-        {/* Add test component temporarily */}
-        <ActivityFeedTest />
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
