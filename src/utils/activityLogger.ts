@@ -20,7 +20,8 @@ export { logUserLogin } from './activity/userActivity';
 export {
   logProjectActivity,
   logProjectCreated,
-  logProjectUpdated
+  logProjectUpdated,
+  logProjectDeleted
 } from './activity/projectActivity';
 
 // Client activities

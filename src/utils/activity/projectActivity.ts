@@ -33,3 +33,14 @@ export const logProjectUpdated = async (projectName: string, projectId: string, 
     comment: clientName ? `Client: ${clientName}` : undefined
   });
 };
+
+export const logProjectDeleted = async (projectName: string, projectId: string, clientName: string) => {
+  await logActivity({
+    action_type: 'deleted',
+    entity_type: 'project',
+    entity_id: projectId,
+    entity_name: projectName,
+    description: `Deleted project: ${projectName} for client ${clientName}`,
+    comment: `Client: ${clientName}`
+  });
+};
