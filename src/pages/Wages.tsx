@@ -31,6 +31,9 @@ interface TimeEntry {
   };
   employees: {
     name: string;
+    employee_services?: {
+      service_id: string;
+    }[];
   };
 }
 
@@ -49,7 +52,7 @@ const Wages = () => {
   const [selectedMonth, setSelectedMonth] = useState<Date>(new Date());
   const [globalServiceFilter, setGlobalServiceFilter] = useState<string>('all');
 
-  // Fetch time entries instead of wage records
+  // Fetch time entries with employee services data
   const { data: timeEntries = [], isLoading } = useQuery({
     queryKey: ['time-entries', selectedEmployee, selectedMonth, globalServiceFilter],
     queryFn: async () => {
@@ -67,7 +70,10 @@ const Wages = () => {
               hourly_rate
             )
           ),
-          employees(name)
+          employees(
+            name,
+            employee_services(service_id)
+          )
         `)
         .gte('start_time', startDate)
         .lte('start_time', endDate)
@@ -138,11 +144,15 @@ const Wages = () => {
     employees: entry.employees
   }));
 
-  // Filter wage records based on filters
+  // Filter wage records based on filters including service filter
   const filteredWageRecords = wageRecords.filter(record => {
     const matchesEmployee = selectedEmployee === 'all' || record.employee_id === selectedEmployee;
-    // Simplified service filter for now since we don't have the relationship
-    const matchesService = globalServiceFilter === 'all' || true;
+    
+    // Properly implement service filter through employee services
+    const matchesService = globalServiceFilter === 'all' || 
+      (record.employees?.employee_services && 
+       record.employees.employee_services.some(es => es.service_id === globalServiceFilter));
+    
     return matchesEmployee && matchesService;
   });
 

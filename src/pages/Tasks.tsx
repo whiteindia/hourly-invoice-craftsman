@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -35,6 +36,9 @@ interface Task {
   };
   employees: {
     name: string;
+    employee_services?: {
+      service_id: string;
+    }[];
   };
 }
 
@@ -72,7 +76,7 @@ const Tasks = () => {
   const [assigneeFilter, setAssigneeFilter] = useState('all');
   const [globalServiceFilter, setGlobalServiceFilter] = useState<string>('all');
 
-  // Fetch tasks with project and employee data
+  // Fetch tasks with project and employee data including employee services
   const { data: tasks = [], isLoading } = useQuery({
     queryKey: ['tasks'],
     queryFn: async () => {
@@ -81,7 +85,10 @@ const Tasks = () => {
         .select(`
           *,
           projects(name, hourly_rate),
-          employees!tasks_assignee_id_fkey(name)
+          employees!tasks_assignee_id_fkey(
+            name,
+            employee_services(service_id)
+          )
         `)
         .order('created_at', { ascending: false });
       
@@ -241,8 +248,11 @@ const Tasks = () => {
     const matchesStatus = statusFilter === 'all' || task.status === statusFilter;
     const matchesAssignee = assigneeFilter === 'all' || task.assignee_id === assigneeFilter;
     const matchesSearch = task.name.toLowerCase().includes(searchTerm.toLowerCase());
-    // Simplified service filter for now since we don't have the relationship
-    const matchesService = globalServiceFilter === 'all' || true;
+    
+    // Properly implement service filter through employee services
+    const matchesService = globalServiceFilter === 'all' || 
+      (task.employees?.employee_services && 
+       task.employees.employee_services.some(es => es.service_id === globalServiceFilter));
     
     return matchesProject && matchesStatus && matchesAssignee && matchesSearch && matchesService;
   });

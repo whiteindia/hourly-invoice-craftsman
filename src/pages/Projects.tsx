@@ -208,10 +208,26 @@ const Projects = () => {
     }
   });
 
-  // Filter projects based on global service filter (simplified for now)
+  // Filter projects based on global service filter
   const filteredProjects = projects.filter(project => {
     if (globalServiceFilter === 'all') return true;
-    return project.type === globalServiceFilter;
+    
+    // Map project types to service names for filtering
+    // This is a simplified mapping - you may need to adjust based on your actual service-project relationship
+    const serviceProjectMapping: Record<string, string[]> = {
+      'DevOps': ['DevOps'],
+      'Marketing': ['Marketing'],
+      'Consulting': ['Consulting'],
+      'Strategy': ['Strategy'],
+      'Technical Writing': ['Technical Writing'],
+      'BRD': ['BRD']
+    };
+    
+    const selectedService = services.find(s => s.id === globalServiceFilter);
+    if (!selectedService) return true;
+    
+    const mappedTypes = serviceProjectMapping[selectedService.name] || [];
+    return mappedTypes.includes(project.type);
   });
 
   const handleCreateProject = async () => {
