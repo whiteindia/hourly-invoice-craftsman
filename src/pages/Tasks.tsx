@@ -445,7 +445,7 @@ const Tasks = () => {
                     </Badge>
                   </div>
 
-                  {/* Time Tracker */}
+                  {/* Time Tracker and Hours */}
                   <div className="flex items-center justify-between">
                     <TimeTrackerWithComment
                       task={{ id: task.id, name: task.name }}
@@ -456,30 +456,17 @@ const Tasks = () => {
 
                   {/* Action Buttons */}
                   <div className="flex justify-between items-center pt-2 border-t">
-                    <div className="flex space-x-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setEditingTask(task);
-                          setIsEditDialogOpen(true);
-                        }}
-                        className="text-xs"
-                      >
-                        <Edit className="h-3 w-3" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setSelectedTaskForComment(task);
-                          setIsCommentDialogOpen(true);
-                        }}
-                        className="text-xs"
-                      >
-                        <MessageCircle className="h-3 w-3" />
-                      </Button>
-                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setEditingTask(task);
+                        setIsEditDialogOpen(true);
+                      }}
+                      className="text-xs"
+                    >
+                      <Edit className="h-3 w-3" />
+                    </Button>
                     
                     <Button
                       variant="outline"
