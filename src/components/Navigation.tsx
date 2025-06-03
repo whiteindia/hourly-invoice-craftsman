@@ -53,6 +53,8 @@ const Navigation = () => {
     ...(roleString === 'admin' || roleString === 'manager' ? [{ path: '/employees', label: 'Employees', icon: UserCheck }] : []),
     // Services - moved to config
     { path: '/services', label: 'Services', icon: Settings },
+    // Roles - only admin can see
+    ...(roleString === 'admin' ? [{ path: '/roles', label: 'Roles', icon: UserCheck }] : []),
     // Privileges - new menu item
     { path: '/privileges', label: 'Privileges', icon: Shield },
   ];
