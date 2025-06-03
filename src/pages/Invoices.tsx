@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -284,7 +285,7 @@ const Invoices = () => {
                                   {task.name}
                                 </label>
                                 <div className="text-xs text-gray-600">
-                                  {task.hours}h × ${task.rate}/hr = ${(task.hours * task.rate).toFixed(2)}
+                                  {task.hours}h × ₹{task.rate}/hr = ₹{(task.hours * task.rate).toFixed(2)}
                                 </div>
                               </div>
                             </div>
@@ -307,7 +308,7 @@ const Invoices = () => {
                       <div className="flex justify-between items-center">
                         <span className="font-medium">Total Amount:</span>
                         <span className="text-2xl font-bold text-green-600">
-                          ${getSelectedTasksTotal().totalAmount.toFixed(2)}
+                          ₹{getSelectedTasksTotal().totalAmount.toFixed(2)}
                         </span>
                       </div>
                     </div>
@@ -333,7 +334,7 @@ const Invoices = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Total Revenue</p>
-                  <p className="text-2xl font-bold text-green-600">${totalRevenue.toFixed(2)}</p>
+                  <p className="text-2xl font-bold text-green-600">₹{totalRevenue.toFixed(2)}</p>
                 </div>
                 <DollarSign className="h-8 w-8 text-green-600" />
               </div>
@@ -344,7 +345,7 @@ const Invoices = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Pending Revenue</p>
-                  <p className="text-2xl font-bold text-blue-600">${pendingRevenue.toFixed(2)}</p>
+                  <p className="text-2xl font-bold text-blue-600">₹{pendingRevenue.toFixed(2)}</p>
                 </div>
                 <FileText className="h-8 w-8 text-blue-600" />
               </div>
@@ -379,14 +380,14 @@ const Invoices = () => {
                     <p className="text-gray-600 mb-1">{invoice.client}</p>
                     <p className="text-sm text-gray-500">{invoice.project}</p>
                     <div className="mt-3 flex items-center space-x-6 text-sm text-gray-600">
-                      <span>{invoice.hours}h × ${invoice.rate}/hr</span>
+                      <span>{invoice.hours}h × ₹{invoice.rate}/hr</span>
                       <span>Due: {invoice.dueDate}</span>
                     </div>
                   </div>
                   
                   <div className="text-right">
                     <p className="text-2xl font-bold text-gray-900 mb-4">
-                      ${invoice.amount.toFixed(2)}
+                      ₹{invoice.amount.toFixed(2)}
                     </p>
                     <div className="flex space-x-2">
                       <Button variant="outline" size="sm">
