@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Edit, Trash2, Play, Pause, Check, MessageCircle, Clock, Filter, History } from 'lucide-react';
+import { Plus, Edit, Trash2, Play, Pause, Check, MessageCircle, Clock, Filter, History, Calendar, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -34,6 +35,14 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import { Calendar as CalendarComponent } from '@/components/ui/calendar';
+import { format, differenceInDays, isAfter, parseISO } from 'date-fns';
+import { cn } from '@/lib/utils';
 
 type TaskStatus = Database['public']['Enums']['task_status'];
 
@@ -48,6 +57,8 @@ interface TaskData {
   invoiced: boolean;
   hours: number;
   date: string;
+  deadline: string | null;
+  estimated_duration: number | null;
   projects: {
     name: string;
     hourly_rate: number;
@@ -91,7 +102,9 @@ const Tasks = () => {
     name: '',
     project_id: '',
     assignee_id: '',
-    status: 'Not Started' as TaskStatus
+    status: 'Not Started' as TaskStatus,
+    deadline: null as Date | null,
+    estimated_duration: ''
   });
   const [editingTask, setEditingTask] = useState<TaskData | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -103,6 +116,31 @@ const Tasks = () => {
   const [assignerFilter, setAssignerFilter] = useState('all');
   const [globalServiceFilter, setGlobalServiceFilter] = useState<string>('all');
   const [expandedHistories, setExpandedHistories] = useState<Set<string>>(new Set());
+
+  // Helper functions for task status checking
+  const isTaskOverdue = (deadline: string | null): boolean => {
+    if (!deadline) return false;
+    const today = new Date();
+    const deadlineDate = parseISO(deadline);
+    return isAfter(today, deadlineDate);
+  };
+
+  const isTaskOverDuration = (hours: number, estimatedDuration: number | null): boolean => {
+    if (!estimatedDuration) return false;
+    return hours > estimatedDuration;
+  };
+
+  const getDaysBehind = (deadline: string | null): number => {
+    if (!deadline) return 0;
+    const today = new Date();
+    const deadlineDate = parseISO(deadline);
+    return Math.max(0, differenceInDays(today, deadlineDate));
+  };
+
+  const getHoursBehind = (hours: number, estimatedDuration: number | null): number => {
+    if (!estimatedDuration) return 0;
+    return Math.max(0, hours - estimatedDuration);
+  };
 
   // Fetch tasks with project and employee data including client data and assigner data
   const { data: tasks = [], isLoading } = useQuery({
@@ -146,7 +184,7 @@ const Tasks = () => {
     queryKey: ['project-services'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('project_services')
+        .from('employee_services')
         .select('*');
       
       if (error) throw error;
@@ -187,7 +225,11 @@ const Tasks = () => {
     mutationFn: async (taskData: any) => {
       const { data, error } = await supabase
         .from('tasks')
-        .insert([taskData])
+        .insert([{
+          ...taskData,
+          deadline: taskData.deadline ? format(taskData.deadline, 'yyyy-MM-dd') : null,
+          estimated_duration: taskData.estimated_duration ? parseFloat(taskData.estimated_duration) : null
+        }])
         .select()
         .single();
       
@@ -211,7 +253,9 @@ const Tasks = () => {
         name: '',
         project_id: '',
         assignee_id: '',
-        status: 'Not Started'
+        status: 'Not Started',
+        deadline: null,
+        estimated_duration: ''
       });
       setIsDialogOpen(false);
       toast.success('Task created successfully!');
@@ -226,7 +270,11 @@ const Tasks = () => {
     mutationFn: async ({ id, ...updates }: { id: string } & any) => {
       const { data, error } = await supabase
         .from('tasks')
-        .update(updates)
+        .update({
+          ...updates,
+          deadline: updates.deadline ? format(new Date(updates.deadline), 'yyyy-MM-dd') : null,
+          estimated_duration: updates.estimated_duration ? parseFloat(updates.estimated_duration) : null
+        })
         .eq('id', id)
         .select()
         .single();
@@ -295,20 +343,52 @@ const Tasks = () => {
     }
   });
 
-  // Filter tasks based on all filters including global service filter from project services
-  const filteredTasks = tasks.filter(task => {
-    const matchesProject = selectedProject === 'all' || task.project_id === selectedProject;
-    const matchesStatus = statusFilter === 'all' || task.status === statusFilter;
-    const matchesAssignee = assigneeFilter === 'all' || task.assignee_id === assigneeFilter;
-    const matchesAssigner = assignerFilter === 'all' || task.assigner_id === assignerFilter;
-    const matchesSearch = task.name.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    // Filter by service through project services
-    const matchesService = globalServiceFilter === 'all' || 
-      projectServices.some(ps => ps.project_id === task.project_id && ps.service_id === globalServiceFilter);
-    
-    return matchesProject && matchesStatus && matchesAssignee && matchesAssigner && matchesSearch && matchesService;
-  });
+  // Filter and sort tasks
+  const filteredAndSortedTasks = React.useMemo(() => {
+    let filtered = tasks.filter(task => {
+      const matchesProject = selectedProject === 'all' || task.project_id === selectedProject;
+      const matchesStatus = statusFilter === 'all' || task.status === statusFilter;
+      const matchesAssignee = assigneeFilter === 'all' || task.assignee_id === assigneeFilter;
+      const matchesAssigner = assignerFilter === 'all' || task.assigner_id === assignerFilter;
+      const matchesSearch = task.name.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      // Filter by service through project services
+      const matchesService = globalServiceFilter === 'all' || 
+        projectServices.some(ps => ps.project_id === task.project_id && ps.service_id === globalServiceFilter);
+      
+      return matchesProject && matchesStatus && matchesAssignee && matchesAssigner && matchesSearch && matchesService;
+    });
+
+    // Sort tasks: overdue or over-duration tasks at the top
+    return filtered.sort((a, b) => {
+      const aIsOverdue = isTaskOverdue(a.deadline);
+      const aIsOverDuration = isTaskOverDuration(a.hours, a.estimated_duration);
+      const bIsOverdue = isTaskOverdue(b.deadline);
+      const bIsOverDuration = isTaskOverDuration(b.hours, b.estimated_duration);
+      
+      const aIsPriority = aIsOverdue || aIsOverDuration;
+      const bIsPriority = bIsOverdue || bIsOverDuration;
+      
+      if (aIsPriority && !bIsPriority) return -1;
+      if (!aIsPriority && bIsPriority) return 1;
+      
+      // If both are priority, sort by most overdue/over-duration first
+      if (aIsPriority && bIsPriority) {
+        const aDaysBehind = getDaysBehind(a.deadline);
+        const bDaysBehind = getDaysBehind(b.deadline);
+        const aHoursBehind = getHoursBehind(a.hours, a.estimated_duration);
+        const bHoursBehind = getHoursBehind(b.hours, b.estimated_duration);
+        
+        const aTotalBehind = aDaysBehind + aHoursBehind;
+        const bTotalBehind = bDaysBehind + bHoursBehind;
+        
+        return bTotalBehind - aTotalBehind;
+      }
+      
+      // Default sort by creation date
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
+  }, [tasks, selectedProject, statusFilter, assigneeFilter, assignerFilter, searchTerm, globalServiceFilter, projectServices]);
 
   const handleCreateTask = () => {
     createTaskMutation.mutate(newTask);
@@ -409,6 +489,42 @@ const Tasks = () => {
                       </SelectContent>
                     </Select>
                   </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="deadline">Deadline</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className={cn(
+                            "w-full justify-start text-left font-normal",
+                            !newTask.deadline && "text-muted-foreground"
+                          )}
+                        >
+                          <Calendar className="mr-2 h-4 w-4" />
+                          {newTask.deadline ? format(newTask.deadline, "PPP") : <span>Pick a deadline</span>}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <CalendarComponent
+                          mode="single"
+                          selected={newTask.deadline}
+                          onSelect={(date) => setNewTask({ ...newTask, deadline: date })}
+                          initialFocus
+                          className="pointer-events-auto"
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="estimated_duration">Estimated Duration (hours)</Label>
+                    <Input
+                      id="estimated_duration"
+                      type="number"
+                      placeholder="Estimated hours"
+                      value={newTask.estimated_duration}
+                      onChange={(e) => setNewTask({ ...newTask, estimated_duration: e.target.value })}
+                    />
+                  </div>
                   <Button onClick={handleCreateTask} className="w-full">
                     Create Task
                   </Button>
@@ -457,73 +573,107 @@ const Tasks = () => {
 
           {/* Mobile Task Cards */}
           <div className="space-y-3">
-            {filteredTasks.map((task) => (
-              <Card key={task.id} className="p-4">
-                <div className="space-y-3">
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-medium text-sm truncate">{task.name}</h3>
-                      <p className="text-xs text-gray-500 truncate">{task.projects?.name}</p>
-                      <p className="text-xs text-gray-500">{task.employees?.name}</p>
+            {filteredAndSortedTasks.map((task) => {
+              const isOverdue = isTaskOverdue(task.deadline);
+              const isOverDuration = isTaskOverDuration(task.hours, task.estimated_duration);
+              const daysBehind = getDaysBehind(task.deadline);
+              const hoursBehind = getHoursBehind(task.hours, task.estimated_duration);
+
+              return (
+                <Card key={task.id} className={cn("p-4", (isOverdue || isOverDuration) && "border-red-500 bg-red-50")}>
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-medium text-sm truncate">{task.name}</h3>
+                        <p className="text-xs text-gray-500 truncate">{task.projects?.name}</p>
+                        <p className="text-xs text-gray-500">{task.employees?.name}</p>
+                        
+                        {/* Deadline and Duration Info */}
+                        {task.deadline && (
+                          <div className={cn("text-xs", isOverdue ? "text-red-600 font-semibold" : "text-gray-600")}>
+                            <Calendar className="inline h-3 w-3 mr-1" />
+                            Deadline: {format(parseISO(task.deadline), "MMM dd, yyyy")}
+                            {isOverdue && ` (${daysBehind} days overdue)`}
+                          </div>
+                        )}
+                        
+                        {task.estimated_duration && (
+                          <div className={cn("text-xs", isOverDuration ? "text-red-600 font-semibold" : "text-gray-600")}>
+                            <Clock className="inline h-3 w-3 mr-1" />
+                            Est: {task.estimated_duration}h | Logged: {task.hours}h
+                            {isOverDuration && ` (+${hoursBehind.toFixed(1)}h over)`}
+                          </div>
+                        )}
+                      </div>
+                      
+                      <div className="flex flex-col items-end space-y-1">
+                        <Badge className={
+                          task.status === 'Not Started' ? 'bg-gray-100 text-gray-800 text-xs' :
+                          task.status === 'In Progress' ? 'bg-blue-100 text-blue-800 text-xs' :
+                          'bg-green-100 text-green-800 text-xs'
+                        }>
+                          {task.status}
+                        </Badge>
+                        
+                        {(isOverdue || isOverDuration) && (
+                          <Badge className="bg-red-100 text-red-800 text-xs">
+                            <AlertTriangle className="h-3 w-3 mr-1" />
+                            Urgent
+                          </Badge>
+                        )}
+                      </div>
                     </div>
-                    <Badge className={
-                      task.status === 'Not Started' ? 'bg-gray-100 text-gray-800 text-xs' :
-                      task.status === 'In Progress' ? 'bg-blue-100 text-blue-800 text-xs' :
-                      'bg-green-100 text-green-800 text-xs'
-                    }>
-                      {task.status}
-                    </Badge>
-                  </div>
 
-                  {/* Time Tracker and Hours */}
-                  <div className="flex items-center justify-between">
-                    <TimeTrackerWithComment
-                      task={{ id: task.id, name: task.name }}
-                      onSuccess={() => queryClient.invalidateQueries({ queryKey: ['tasks'] })}
-                    />
-                    <span className="text-xs text-gray-500">{task.hours}h logged</span>
-                  </div>
-
-                  {/* Action Buttons */}
-                  <div className="flex justify-between items-center pt-2 border-t">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setEditingTask(task);
-                        setIsEditDialogOpen(true);
-                      }}
-                      className="text-xs"
-                    >
-                      <Edit className="h-3 w-3" />
-                    </Button>
-                    
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => toggleHistory(task.id)}
-                      className="text-xs"
-                    >
-                      <History className="h-3 w-3 mr-1" />
-                      History
-                    </Button>
-                  </div>
-
-                  {/* Collapsible History */}
-                  <Collapsible open={expandedHistories.has(task.id)}>
-                    <CollapsibleContent className="pt-3 border-t">
-                      <TaskHistory
-                        taskId={task.id}
-                        onUpdate={() => queryClient.invalidateQueries({ queryKey: ['tasks'] })}
+                    {/* Time Tracker and Hours */}
+                    <div className="flex items-center justify-between">
+                      <TimeTrackerWithComment
+                        task={{ id: task.id, name: task.name }}
+                        onSuccess={() => queryClient.invalidateQueries({ queryKey: ['tasks'] })}
                       />
-                    </CollapsibleContent>
-                  </Collapsible>
-                </div>
-              </Card>
-            ))}
+                      <span className="text-xs text-gray-500">{task.hours}h logged</span>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex justify-between items-center pt-2 border-t">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setEditingTask(task);
+                          setIsEditDialogOpen(true);
+                        }}
+                        className="text-xs"
+                      >
+                        <Edit className="h-3 w-3" />
+                      </Button>
+                      
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => toggleHistory(task.id)}
+                        className="text-xs"
+                      >
+                        <History className="h-3 w-3 mr-1" />
+                        History
+                      </Button>
+                    </div>
+
+                    {/* Collapsible History */}
+                    <Collapsible open={expandedHistories.has(task.id)}>
+                      <CollapsibleContent className="pt-3 border-t">
+                        <TaskHistory
+                          taskId={task.id}
+                          onUpdate={() => queryClient.invalidateQueries({ queryKey: ['tasks'] })}
+                        />
+                      </CollapsibleContent>
+                    </Collapsible>
+                  </div>
+                </Card>
+              );
+            })}
           </div>
 
-          {filteredTasks.length === 0 && (
+          {filteredAndSortedTasks.length === 0 && (
             <div className="text-center py-8 text-gray-500">
               No tasks found matching your filters.
             </div>
@@ -615,6 +765,42 @@ const Tasks = () => {
                         ))}
                       </SelectContent>
                     </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="deadline">Deadline</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className={cn(
+                            "w-full justify-start text-left font-normal",
+                            !newTask.deadline && "text-muted-foreground"
+                          )}
+                        >
+                          <Calendar className="mr-2 h-4 w-4" />
+                          {newTask.deadline ? format(newTask.deadline, "PPP") : <span>Pick a deadline</span>}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <CalendarComponent
+                          mode="single"
+                          selected={newTask.deadline}
+                          onSelect={(date) => setNewTask({ ...newTask, deadline: date })}
+                          initialFocus
+                          className="pointer-events-auto"
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="estimated_duration">Estimated Duration (hours)</Label>
+                    <Input
+                      id="estimated_duration"
+                      type="number"
+                      placeholder="Estimated hours"
+                      value={newTask.estimated_duration}
+                      onChange={(e) => setNewTask({ ...newTask, estimated_duration: e.target.value })}
+                    />
                   </div>
                   <Button onClick={handleCreateTask} className="w-full">
                     Create Task
@@ -734,14 +920,14 @@ const Tasks = () => {
         {/* Tasks List */}
         <Card>
           <CardHeader>
-            <CardTitle>Tasks ({filteredTasks.length})</CardTitle>
+            <CardTitle>Tasks ({filteredAndSortedTasks.length})</CardTitle>
             <CardDescription>
-              {filteredTasks.length} task{filteredTasks.length !== 1 ? 's' : ''} found
+              {filteredAndSortedTasks.length} task{filteredAndSortedTasks.length !== 1 ? 's' : ''} found
               {globalServiceFilter !== 'all' && ` filtered by ${services.find(s => s.id === globalServiceFilter)?.name}`}
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {filteredTasks.length === 0 ? (
+            {filteredAndSortedTasks.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
                 No tasks found matching your filters.
               </div>
@@ -754,105 +940,150 @@ const Tasks = () => {
                     <TableHead>Assignee</TableHead>
                     <TableHead>Assigner</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Hours</TableHead>
+                    <TableHead>Deadline</TableHead>
+                    <TableHead>Duration</TableHead>
                     <TableHead>Timer</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredTasks.map((task) => (
-                    <React.Fragment key={task.id}>
-                      <TableRow>
-                        <TableCell className="font-medium">{task.name}</TableCell>
-                        <TableCell>{task.projects?.name}</TableCell>
-                        <TableCell>{task.employees?.name}</TableCell>
-                        <TableCell>{task.assigners?.name || 'N/A'}</TableCell>
-                        <TableCell>
-                          <Badge className={
-                            task.status === 'Not Started' ? 'bg-gray-100 text-gray-800' :
-                            task.status === 'In Progress' ? 'bg-blue-100 text-blue-800' :
-                            'bg-green-100 text-green-800'
-                          }>
-                            {task.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{task.hours || 0}h</TableCell>
-                        <TableCell>
-                          {task.status !== 'Completed' && (
-                            <TimeTrackerWithComment
-                              task={{ id: task.id, name: task.name }}
-                              onSuccess={() => queryClient.invalidateQueries({ queryKey: ['tasks'] })}
-                            />
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center space-x-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                setEditingTask(task);
-                                setIsEditDialogOpen(true);
-                              }}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => toggleHistory(task.id)}
-                            >
-                              <History className="h-4 w-4" />
-                            </Button>
-                            
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="text-red-600 hover:text-red-700"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Delete Task</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Are you sure you want to delete this task? This will also delete all time entries associated with this task. This action cannot be undone.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={() => handleDeleteTask(task.id)}
-                                    className="bg-red-600 hover:bg-red-700"
-                                  >
-                                    Delete Task
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                      
-                      {/* Collapsible History Row */}
-                      {expandedHistories.has(task.id) && (
-                        <TableRow>
-                          <TableCell colSpan={8} className="p-0">
-                            <div className="bg-gray-50 p-4 border-t">
-                              <TaskHistory
-                                taskId={task.id}
-                                onUpdate={() => queryClient.invalidateQueries({ queryKey: ['tasks'] })}
+                  {filteredAndSortedTasks.map((task) => {
+                    const isOverdue = isTaskOverdue(task.deadline);
+                    const isOverDuration = isTaskOverDuration(task.hours, task.estimated_duration);
+                    const daysBehind = getDaysBehind(task.deadline);
+                    const hoursBehind = getHoursBehind(task.hours, task.estimated_duration);
+
+                    return (
+                      <React.Fragment key={task.id}>
+                        <TableRow className={cn((isOverdue || isOverDuration) && "bg-red-50 border-red-200")}>
+                          <TableCell className="font-medium">
+                            <div className="flex items-center space-x-2">
+                              <span>{task.name}</span>
+                              {(isOverdue || isOverDuration) && (
+                                <AlertTriangle className="h-4 w-4 text-red-500" />
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>{task.projects?.name}</TableCell>
+                          <TableCell>{task.employees?.name}</TableCell>
+                          <TableCell>{task.assigners?.name || 'N/A'}</TableCell>
+                          <TableCell>
+                            <Badge className={
+                              task.status === 'Not Started' ? 'bg-gray-100 text-gray-800' :
+                              task.status === 'In Progress' ? 'bg-blue-100 text-blue-800' :
+                              'bg-green-100 text-green-800'
+                            }>
+                              {task.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            {task.deadline ? (
+                              <div className={cn("text-sm", isOverdue && "text-red-600 font-semibold")}>
+                                <div>{format(parseISO(task.deadline), "MMM dd, yyyy")}</div>
+                                {isOverdue && (
+                                  <div className="text-xs text-red-500">
+                                    {daysBehind} days overdue
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-gray-400">No deadline</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <div className="text-sm">
+                              <div className={cn(isOverDuration && "text-red-600 font-semibold")}>
+                                {task.hours || 0}h logged
+                              </div>
+                              {task.estimated_duration && (
+                                <div className="text-xs text-gray-500">
+                                  Est: {task.estimated_duration}h
+                                  {isOverDuration && (
+                                    <span className="text-red-500 font-semibold">
+                                      {' '}(+{hoursBehind.toFixed(1)}h over)
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {task.status !== 'Completed' && (
+                              <TimeTrackerWithComment
+                                task={{ id: task.id, name: task.name }}
+                                onSuccess={() => queryClient.invalidateQueries({ queryKey: ['tasks'] })}
                               />
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center space-x-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setEditingTask(task);
+                                  setIsEditDialogOpen(true);
+                                }}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => toggleHistory(task.id)}
+                              >
+                                <History className="h-4 w-4" />
+                              </Button>
+                              
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="text-red-600 hover:text-red-700"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Delete Task</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Are you sure you want to delete this task? This will also delete all time entries associated with this task. This action cannot be undone.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={() => handleDeleteTask(task.id)}
+                                      className="bg-red-600 hover:bg-red-700"
+                                    >
+                                      Delete Task
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
                             </div>
                           </TableCell>
                         </TableRow>
-                      )}
-                    </React.Fragment>
-                  ))}
+                        
+                        {/* Collapsible History Row */}
+                        {expandedHistories.has(task.id) && (
+                          <TableRow>
+                            <TableCell colSpan={9} className="p-0">
+                              <div className="bg-gray-50 p-4 border-t">
+                                <TaskHistory
+                                  taskId={task.id}
+                                  onUpdate={() => queryClient.invalidateQueries({ queryKey: ['tasks'] })}
+                                />
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
                 </TableBody>
               </Table>
             )}
@@ -920,6 +1151,42 @@ const Tasks = () => {
                       <SelectItem value="Completed">Completed</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="deadline">Deadline</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-full justify-start text-left font-normal",
+                          !editingTask.deadline && "text-muted-foreground"
+                        )}
+                      >
+                        <Calendar className="mr-2 h-4 w-4" />
+                        {editingTask.deadline ? format(parseISO(editingTask.deadline), "PPP") : <span>Pick a deadline</span>}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <CalendarComponent
+                        mode="single"
+                        selected={editingTask.deadline ? parseISO(editingTask.deadline) : undefined}
+                        onSelect={(date) => setEditingTask({ ...editingTask, deadline: date ? format(date, 'yyyy-MM-dd') : null })}
+                        initialFocus
+                        className="pointer-events-auto"
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="estimated_duration">Estimated Duration (hours)</Label>
+                  <Input
+                    id="estimated_duration"
+                    type="number"
+                    placeholder="Estimated hours"
+                    value={editingTask.estimated_duration || ''}
+                    onChange={(e) => setEditingTask({ ...editingTask, estimated_duration: parseFloat(e.target.value) || null })}
+                  />
                 </div>
                 <Button onClick={handleUpdateTask} className="w-full">
                   Update Task
