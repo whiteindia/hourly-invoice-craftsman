@@ -22,16 +22,6 @@ interface ProjectData {
   };
 }
 
-interface DeleteResult {
-  id: string;
-  projectData: {
-    name: string;
-    clients?: {
-      name: string;
-    };
-  };
-}
-
 export const useProjectOperations = () => {
   const queryClient = useQueryClient();
 
@@ -143,7 +133,7 @@ export const useProjectOperations = () => {
 
   // Mutation to delete a project with proper cascade handling
   const deleteProjectMutation = useMutation({
-    mutationFn: async (id: string): Promise<DeleteResult> => {
+    mutationFn: async (id: string) => {
       console.log('Starting project deletion for ID:', id);
       
       // Get project details for logging before deletion
@@ -226,12 +216,12 @@ export const useProjectOperations = () => {
       }
 
       console.log('Project deletion completed successfully');
-      return { 
-        id, 
-        projectData: {
-          name: projectData.name,
-          clients: projectData.clients
-        }
+      
+      // Return simplified structure to avoid TypeScript issues
+      return {
+        deletedProjectId: id,
+        projectName: projectData.name,
+        clientName: projectData.clients?.name || 'Unknown Client'
       };
     },
     onSuccess: async (result) => {
@@ -239,16 +229,14 @@ export const useProjectOperations = () => {
       toast.success('Project and all related data deleted successfully!');
       
       // Log activity
-      if (result && result.projectData) {
-        await logActivity({
-          action_type: 'deleted',
-          entity_type: 'project',
-          entity_id: result.id,
-          entity_name: result.projectData.name,
-          description: `Deleted project: ${result.projectData.name} and all related data`,
-          comment: `Client: ${result.projectData.clients?.name || 'Unknown Client'}`
-        });
-      }
+      await logActivity({
+        action_type: 'deleted',
+        entity_type: 'project',
+        entity_id: result.deletedProjectId,
+        entity_name: result.projectName,
+        description: `Deleted project: ${result.projectName} and all related data`,
+        comment: `Client: ${result.clientName}`
+      });
     },
     onError: (error) => {
       console.error('Project deletion failed:', error);
