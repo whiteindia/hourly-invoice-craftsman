@@ -228,7 +228,10 @@ export const useProjectOperations = () => {
       console.log('Project deletion completed successfully');
       return { 
         id, 
-        projectData
+        projectData: {
+          name: projectData.name,
+          clients: projectData.clients
+        }
       };
     },
     onSuccess: async (result) => {

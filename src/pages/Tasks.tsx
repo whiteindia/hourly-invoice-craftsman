@@ -18,6 +18,7 @@ import TimeTrackerWithComment from '@/components/TimeTrackerWithComment';
 import TaskHistory from '@/components/TaskHistory';
 import { logActivity } from '@/utils/activityLogger';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   Collapsible,
   CollapsibleContent,
@@ -97,6 +98,26 @@ interface Service {
 const Tasks = () => {
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
+  const { user } = useAuth();
+
+  // Helper function to get current user's employee ID
+  const getCurrentUserEmployeeId = async () => {
+    if (!user?.email) return null;
+    
+    const { data, error } = await supabase
+      .from('employees')
+      .select('id')
+      .eq('email', user.email)
+      .single();
+    
+    if (error) {
+      console.error('Error fetching current user employee:', error);
+      return null;
+    }
+    
+    return data?.id || null;
+  };
+
   const [newTask, setNewTask] = useState({
     name: '',
     project_id: '',
@@ -223,11 +244,12 @@ const Tasks = () => {
   // Mutation to create a new task
   const createTaskMutation = useMutation({
     mutationFn: async (taskData: any) => {
-      // Get current user as assigner if not provided
-      const { data: { user } } = await supabase.auth.getUser();
+      // Get current user's employee ID for assigner
+      const currentUserEmployeeId = await getCurrentUserEmployeeId();
+      
       const finalTaskData = {
         ...taskData,
-        assigner_id: taskData.assigner_id || user?.id,
+        assigner_id: currentUserEmployeeId, // Auto-set to current user
         deadline: taskData.deadline ? format(taskData.deadline, 'yyyy-MM-dd') : null,
         estimated_duration: taskData.estimated_duration ? parseFloat(taskData.estimated_duration) : null
       };
@@ -274,13 +296,19 @@ const Tasks = () => {
   // Mutation to update an existing task
   const updateTaskMutation = useMutation({
     mutationFn: async ({ id, ...updates }: { id: string } & any) => {
+      // Get current user's employee ID for assigner if not already set
+      const currentUserEmployeeId = await getCurrentUserEmployeeId();
+      
+      const finalUpdates = {
+        ...updates,
+        assigner_id: updates.assigner_id || currentUserEmployeeId, // Auto-set if not provided
+        deadline: updates.deadline ? format(new Date(updates.deadline), 'yyyy-MM-dd') : null,
+        estimated_duration: updates.estimated_duration ? parseFloat(updates.estimated_duration) : null
+      };
+
       const { data, error } = await supabase
         .from('tasks')
-        .update({
-          ...updates,
-          deadline: updates.deadline ? format(new Date(updates.deadline), 'yyyy-MM-dd') : null,
-          estimated_duration: updates.estimated_duration ? parseFloat(updates.estimated_duration) : null
-        })
+        .update(finalUpdates)
         .eq('id', id)
         .select()
         .single();
