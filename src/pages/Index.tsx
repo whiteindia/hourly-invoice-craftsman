@@ -17,6 +17,7 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import Navigation from '@/components/Navigation';
+import AdminTestData from '@/components/AdminTestData';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -297,25 +298,29 @@ const Index = () => {
 
         {/* Debug info for yugandhar@whiteindia.in */}
         {user?.email === 'yugandhar@whiteindia.in' && (
-          <Card className="mb-6 border-blue-200">
-            <CardHeader>
-              <CardTitle className="text-blue-700">Debug Info (Admin Only)</CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p><strong>User:</strong> {user?.email}</p>
-                  <p><strong>Role:</strong> {userRole}</p>
-                  <p><strong>Stats Errors:</strong> {statsError ? 'Yes' : 'No'}</p>
+          <div className="mb-6 space-y-4">
+            <Card className="border-blue-200">
+              <CardHeader>
+                <CardTitle className="text-blue-700">Debug Info (Admin Only)</CardTitle>
+              </CardHeader>
+              <CardContent className="text-sm">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p><strong>User:</strong> {user?.email}</p>
+                    <p><strong>Role:</strong> {userRole}</p>
+                    <p><strong>Stats Errors:</strong> {statsError ? 'Yes' : 'No'}</p>
+                  </div>
+                  <div>
+                    <p><strong>Clients Count:</strong> {stats?.clients}</p>
+                    <p><strong>Projects Count:</strong> {stats?.projects}</p>
+                    <p><strong>Tasks Count:</strong> {stats?.tasks}</p>
+                  </div>
                 </div>
-                <div>
-                  <p><strong>Clients Count:</strong> {stats?.clients}</p>
-                  <p><strong>Projects Count:</strong> {stats?.projects}</p>
-                  <p><strong>Tasks Count:</strong> {stats?.tasks}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+            
+            <AdminTestData />
+          </div>
         )}
 
         {/* Stats Cards */}
