@@ -31,17 +31,11 @@ interface TimeEntry {
     projects: {
       name: string;
       hourly_rate: number;
+      type: string;
     };
   };
   employees: {
     name: string;
-    employee_services?: {
-      service_id: string;
-      services: {
-        id: string;
-        name: string;
-      };
-    }[];
   };
 }
 
@@ -62,7 +56,7 @@ const Wages = () => {
   const [wageStatusFilter, setWageStatusFilter] = useState<string>('all');
   const queryClient = useQueryClient();
 
-  // Fetch time entries with employee services data
+  // Fetch time entries with project service type data
   const { data: timeEntries = [], isLoading } = useQuery({
     queryKey: ['time-entries', selectedEmployee, selectedMonth],
     queryFn: async () => {
@@ -79,18 +73,12 @@ const Wages = () => {
             wage_status,
             projects(
               name,
-              hourly_rate
+              hourly_rate,
+              type
             )
           ),
           employees(
-            name,
-            employee_services(
-              service_id,
-              services(
-                id,
-                name
-              )
-            )
+            name
           )
         `)
         .gte('start_time', startDate)
@@ -175,17 +163,17 @@ const Wages = () => {
     date: entry.start_time,
     wage_status: entry.tasks?.wage_status || 'wnotpaid',
     tasks: entry.tasks,
-    employees: entry.employees
+    employees: entry.employees,
+    project_service_type: entry.tasks?.projects?.type
   }));
 
   // Filter wage records based on all filters
   const filteredWageRecords = wageRecords.filter(record => {
     const matchesEmployee = selectedEmployee === 'all' || record.employee_id === selectedEmployee;
     
-    // Fix service filter - check if employee has the selected service
+    // Service filter - check project service type instead of employee service
     const matchesService = globalServiceFilter === 'all' || 
-      (record.employees?.employee_services && 
-       record.employees.employee_services.some(es => es.service_id === globalServiceFilter));
+      record.project_service_type === globalServiceFilter;
     
     // Wage status filter
     const matchesWageStatus = wageStatusFilter === 'all' || record.wage_status === wageStatusFilter;
@@ -275,15 +263,15 @@ const Wages = () => {
             {/* Second row of filters */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Service Filter</Label>
+                <Label>Project Service Type</Label>
                 <Select value={globalServiceFilter} onValueChange={setGlobalServiceFilter}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Filter by service" />
+                    <SelectValue placeholder="Filter by project service type" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Services</SelectItem>
+                    <SelectItem value="all">All Service Types</SelectItem>
                     {services.map((service) => (
-                      <SelectItem key={service.id} value={service.id}>
+                      <SelectItem key={service.id} value={service.name}>
                         {service.name}
                       </SelectItem>
                     ))}
@@ -349,7 +337,7 @@ const Wages = () => {
             <CardTitle>Wage Records</CardTitle>
             <CardDescription>
               Employee wage records for {format(selectedMonth, "MMMM yyyy")}
-              {globalServiceFilter !== 'all' && ` filtered by ${services.find(s => s.id === globalServiceFilter)?.name}`}
+              {globalServiceFilter !== 'all' && ` filtered by ${globalServiceFilter} service type`}
               {wageStatusFilter !== 'all' && ` - ${wageStatusFilter === 'wpaid' ? 'Paid' : 'Not Paid'} wages`}
             </CardDescription>
           </CardHeader>
@@ -360,6 +348,7 @@ const Wages = () => {
                   <TableHead>Employee</TableHead>
                   <TableHead>Task</TableHead>
                   <TableHead>Project</TableHead>
+                  <TableHead>Service Type</TableHead>
                   <TableHead>Date</TableHead>
                   <TableHead>Hours</TableHead>
                   <TableHead>Rate</TableHead>
@@ -374,6 +363,7 @@ const Wages = () => {
                     <TableCell>{record.employees?.name}</TableCell>
                     <TableCell>{record.tasks?.name}</TableCell>
                     <TableCell>{record.tasks?.projects?.name}</TableCell>
+                    <TableCell>{record.project_service_type}</TableCell>
                     <TableCell>{format(new Date(record.date), "PPP")}</TableCell>
                     <TableCell>{record.hours_worked.toFixed(2)}</TableCell>
                     <TableCell>₹{record.hourly_rate}</TableCell>
