@@ -31,6 +31,7 @@ interface Invoice {
   };
   projects: {
     name: string;
+    type: string;
   };
 }
 
@@ -71,7 +72,7 @@ const Invoices = () => {
   const [expandedInvoice, setExpandedInvoice] = useState<string | null>(null);
   const [globalServiceFilter, setGlobalServiceFilter] = useState<string>('all');
 
-  // Fetch invoices with client and project data
+  // Fetch invoices with client and project data including service type
   const { data: invoices = [], isLoading } = useQuery({
     queryKey: ['invoices'],
     queryFn: async () => {
@@ -80,7 +81,7 @@ const Invoices = () => {
         .select(`
           *,
           clients(name),
-          projects(name)
+          projects(name, type)
         `)
         .order('created_at', { ascending: false });
       
@@ -161,11 +162,11 @@ const Invoices = () => {
     }
   });
 
-  // Filter invoices based on global service filter (simplified for now)
+  // Filter invoices based on global service filter
   const filteredInvoices = invoices.filter(invoice => {
     if (globalServiceFilter === 'all') return true;
-    // Simplified filter since we don't have the services relationship yet
-    return true;
+    // Filter by project service type
+    return invoice.projects.type === globalServiceFilter;
   });
 
   // Create invoice mutation
@@ -426,12 +427,12 @@ const Invoices = () => {
               <Filter className="h-4 w-4 text-gray-500" />
               <Select value={globalServiceFilter} onValueChange={setGlobalServiceFilter}>
                 <SelectTrigger className="w-48">
-                  <SelectValue placeholder="Filter by service" />
+                  <SelectValue placeholder="Filter by service type" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Services</SelectItem>
+                  <SelectItem value="all">All Service Types</SelectItem>
                   {services.map((service) => (
-                    <SelectItem key={service.id} value={service.id}>
+                    <SelectItem key={service.id} value={service.name}>
                       {service.name}
                     </SelectItem>
                   ))}
@@ -577,7 +578,7 @@ const Invoices = () => {
               <CardContent className="p-6 text-center">
                 <p className="text-gray-500">
                   No invoices found
-                  {globalServiceFilter !== 'all' && ` for ${services.find(s => s.id === globalServiceFilter)?.name}`}.
+                  {globalServiceFilter !== 'all' && ` for ${globalServiceFilter} service type`}.
                 </p>
               </CardContent>
             </Card>
@@ -595,6 +596,7 @@ const Invoices = () => {
                       </div>
                       <p className="text-gray-600 mb-1">{invoice.clients.name}</p>
                       <p className="text-sm text-gray-500">{invoice.projects.name}</p>
+                      <p className="text-xs text-gray-400">Service: {invoice.projects.type}</p>
                       <div className="mt-3 flex items-center space-x-6 text-sm text-gray-600">
                         <span>{invoice.hours}h × ₹{invoice.rate}/hr</span>
                         <span>Due: {invoice.due_date}</span>
