@@ -421,18 +421,18 @@ const Tasks = () => {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
-        <Navigation />
-        <div className="flex items-center justify-center py-8">
-          <div className="text-lg">Loading tasks...</div>
-        </div>
+        <Navigation>
+          <div className="flex items-center justify-center py-8">
+            <div className="text-lg">Loading tasks...</div>
+          </div>
+        </Navigation>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
-      <Navigation />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <Navigation>
         <div className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Tasks</h1>
@@ -885,7 +885,7 @@ const Tasks = () => {
             )}
           </CardContent>
         </Card>
-      </div>
+      </Navigation>
     </div>
   );
 };
