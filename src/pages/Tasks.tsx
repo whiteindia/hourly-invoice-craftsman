@@ -24,6 +24,7 @@ interface TaskData {
   name: string;
   project_id: string;
   assignee_id: string;
+  assigner_id: string;
   status: TaskStatus;
   created_at: string;
   invoiced: boolean;
@@ -41,6 +42,9 @@ interface TaskData {
     employee_services?: {
       service_id: string;
     }[];
+  };
+  assigners?: {
+    name: string;
   };
 }
 
@@ -76,9 +80,10 @@ const Tasks = () => {
   const [selectedProject, setSelectedProject] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [assigneeFilter, setAssigneeFilter] = useState('all');
+  const [assignerFilter, setAssignerFilter] = useState('all');
   const [globalServiceFilter, setGlobalServiceFilter] = useState<string>('all');
 
-  // Fetch tasks with project and employee data including employee services and client data
+  // Fetch tasks with project and employee data including employee services, client data, and assigner data
   const { data: tasks = [], isLoading } = useQuery({
     queryKey: ['tasks'],
     queryFn: async () => {
@@ -94,7 +99,8 @@ const Tasks = () => {
           employees!tasks_assignee_id_fkey(
             name,
             employee_services(service_id)
-          )
+          ),
+          assigners:employees!tasks_assigner_id_fkey(name)
         `)
         .order('created_at', { ascending: false });
       
@@ -248,11 +254,12 @@ const Tasks = () => {
     }
   });
 
-  // Filter tasks based on all filters including global service filter
+  // Filter tasks based on all filters including global service filter and assigner filter
   const filteredTasks = tasks.filter(task => {
     const matchesProject = selectedProject === 'all' || task.project_id === selectedProject;
     const matchesStatus = statusFilter === 'all' || task.status === statusFilter;
     const matchesAssignee = assigneeFilter === 'all' || task.assignee_id === assigneeFilter;
+    const matchesAssigner = assignerFilter === 'all' || task.assigner_id === assignerFilter;
     const matchesSearch = task.name.toLowerCase().includes(searchTerm.toLowerCase());
     
     // Properly implement service filter through employee services
@@ -260,7 +267,7 @@ const Tasks = () => {
       (task.employees?.employee_services && 
        task.employees.employee_services.some(es => es.service_id === globalServiceFilter));
     
-    return matchesProject && matchesStatus && matchesAssignee && matchesSearch && matchesService;
+    return matchesProject && matchesStatus && matchesAssignee && matchesAssigner && matchesSearch && matchesService;
   });
 
   const handleCreateTask = () => {
@@ -428,7 +435,7 @@ const Tasks = () => {
               </div>
 
               {/* Second Row */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="assignee-filter">Filter by Assignee</Label>
                   <Select value={assigneeFilter} onValueChange={setAssigneeFilter}>
@@ -446,6 +453,23 @@ const Tasks = () => {
                   </Select>
                 </div>
 
+                <div className="space-y-2">
+                  <Label htmlFor="assigner-filter">Filter by Assigner</Label>
+                  <Select value={assignerFilter} onValueChange={setAssignerFilter}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="All Assigners" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Assigners</SelectItem>
+                      {employees.map((employee) => (
+                        <SelectItem key={employee.id} value={employee.id}>
+                          {employee.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
                 <div className="flex items-end">
                   <Button
                     variant="outline"
@@ -454,6 +478,7 @@ const Tasks = () => {
                       setSelectedProject('all');
                       setStatusFilter('all');
                       setAssigneeFilter('all');
+                      setAssignerFilter('all');
                       setGlobalServiceFilter('all');
                     }}
                     className="w-full"
@@ -487,6 +512,7 @@ const Tasks = () => {
                     <TableHead>Name</TableHead>
                     <TableHead>Project</TableHead>
                     <TableHead>Assignee</TableHead>
+                    <TableHead>Assigner</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Time Logged</TableHead>
                     <TableHead>Actions</TableHead>
@@ -498,6 +524,7 @@ const Tasks = () => {
                       <TableCell className="font-medium">{task.name}</TableCell>
                       <TableCell>{task.projects?.name}</TableCell>
                       <TableCell>{task.employees?.name}</TableCell>
+                      <TableCell>{task.assigners?.name || 'N/A'}</TableCell>
                       <TableCell>
                         <Badge className={
                           task.status === 'Not Started' ? 'bg-gray-100 text-gray-800' :
