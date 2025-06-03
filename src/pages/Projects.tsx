@@ -126,27 +126,42 @@ const Projects = () => {
     }
   });
 
-  // Fetch assignees (admin users and managers)
+  // Fetch assignees (admin users and managers) - Fixed query
   const { data: assignees = [] } = useQuery({
     queryKey: ['assignees'],
     queryFn: async () => {
+      console.log('Fetching assignees...');
       const { data, error } = await supabase
-        .from('profiles')
+        .from('user_roles')
         .select(`
-          id,
-          full_name,
-          email,
-          user_roles!inner(role)
+          user_id,
+          role,
+          profiles!inner (
+            id,
+            full_name,
+            email
+          )
         `)
-        .in('user_roles.role', ['admin', 'manager'])
-        .order('full_name');
+        .in('role', ['admin', 'manager'])
+        .order('profiles.full_name');
       
-      if (error) throw error;
-      return data.map(profile => ({
-        id: profile.id,
-        full_name: profile.full_name || profile.email,
-        email: profile.email
-      })) as Assignee[];
+      if (error) {
+        console.error('Error fetching assignees:', error);
+        throw error;
+      }
+      
+      console.log('Raw assignees data:', data);
+      
+      // Transform the data to match expected format
+      const transformedData = data?.map(item => ({
+        id: item.profiles.id,
+        full_name: item.profiles.full_name || item.profiles.email,
+        email: item.profiles.email
+      })) || [];
+      
+      console.log('Transformed assignees data:', transformedData);
+      
+      return transformedData as Assignee[];
     }
   });
 
