@@ -734,16 +734,28 @@ const Tasks = () => {
                 No tasks found matching your filters.
               </div>
             ) : (
-              <div className="space-y-4">
-                {filteredTasks.map((task) => (
-                  <div key={task.id} className="border rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-4">
-                          <h3 className="font-medium">{task.name}</h3>
-                          <span className="text-sm text-gray-500">{task.projects?.name}</span>
-                          <span className="text-sm text-gray-500">{task.employees?.name}</span>
-                          <span className="text-sm text-gray-500">{task.assigners?.name || 'N/A'}</span>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Task Name</TableHead>
+                    <TableHead>Project</TableHead>
+                    <TableHead>Assignee</TableHead>
+                    <TableHead>Assigner</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Hours</TableHead>
+                    <TableHead>Timer</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredTasks.map((task) => (
+                    <React.Fragment key={task.id}>
+                      <TableRow>
+                        <TableCell className="font-medium">{task.name}</TableCell>
+                        <TableCell>{task.projects?.name}</TableCell>
+                        <TableCell>{task.employees?.name}</TableCell>
+                        <TableCell>{task.assigners?.name || 'N/A'}</TableCell>
+                        <TableCell>
                           <Badge className={
                             task.status === 'Not Started' ? 'bg-gray-100 text-gray-800' :
                             task.status === 'In Progress' ? 'bg-blue-100 text-blue-800' :
@@ -751,80 +763,86 @@ const Tasks = () => {
                           }>
                             {task.status}
                           </Badge>
-                          <span className="text-sm text-gray-500">{task.hours ? task.hours + ' hours' : '0 hours'}</span>
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <TimeTrackerWithComment
-                          task={{ id: task.id, name: task.name }}
-                          onSuccess={() => queryClient.invalidateQueries({ queryKey: ['tasks'] })}
-                        />
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center space-x-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setEditingTask(task);
-                          setIsEditDialogOpen(true);
-                        }}
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => toggleHistory(task.id)}
-                      >
-                        <History className="h-4 w-4 mr-1" />
-                        History
-                      </Button>
-                      
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="text-red-600 hover:text-red-700"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Delete Task</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Are you sure you want to delete this task? This will also delete all time entries associated with this task. This action cannot be undone.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={() => handleDeleteTask(task.id)}
-                              className="bg-red-600 hover:bg-red-700"
+                        </TableCell>
+                        <TableCell>{task.hours || 0}h</TableCell>
+                        <TableCell>
+                          {task.status !== 'Completed' && (
+                            <TimeTrackerWithComment
+                              task={{ id: task.id, name: task.name }}
+                              onSuccess={() => queryClient.invalidateQueries({ queryKey: ['tasks'] })}
+                            />
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center space-x-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setEditingTask(task);
+                                setIsEditDialogOpen(true);
+                              }}
                             >
-                              Delete Task
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </div>
-
-                    {/* Collapsible History */}
-                    <Collapsible open={expandedHistories.has(task.id)}>
-                      <CollapsibleContent className="mt-4 pt-4 border-t">
-                        <TaskHistory
-                          taskId={task.id}
-                          onUpdate={() => queryClient.invalidateQueries({ queryKey: ['tasks'] })}
-                        />
-                      </CollapsibleContent>
-                    </Collapsible>
-                  </div>
-                ))}
-              </div>
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => toggleHistory(task.id)}
+                            >
+                              <History className="h-4 w-4" />
+                            </Button>
+                            
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="text-red-600 hover:text-red-700"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Delete Task</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Are you sure you want to delete this task? This will also delete all time entries associated with this task. This action cannot be undone.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => handleDeleteTask(task.id)}
+                                    className="bg-red-600 hover:bg-red-700"
+                                  >
+                                    Delete Task
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                      
+                      {/* Collapsible History Row */}
+                      {expandedHistories.has(task.id) && (
+                        <TableRow>
+                          <TableCell colSpan={8} className="p-0">
+                            <div className="bg-gray-50 p-4 border-t">
+                              <TaskHistory
+                                taskId={task.id}
+                                onUpdate={() => queryClient.invalidateQueries({ queryKey: ['tasks'] })}
+                              />
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </React.Fragment>
+                  ))}
+                </TableBody>
+              </Table>
             )}
           </CardContent>
         </Card>
