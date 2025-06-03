@@ -13,7 +13,6 @@ import {
   Settings,
   LogOut,
   Wallet,
-  gear,
   Shield
 } from 'lucide-react';
 import {
@@ -43,8 +42,6 @@ const Navigation = () => {
     ...(roleString === 'admin' || roleString === 'accountant' ? [{ path: '/invoices', label: 'Invoices', icon: FileText }] : []),
     // Payments - admin and accountant can see
     ...(roleString === 'admin' || roleString === 'accountant' ? [{ path: '/payments', label: 'Payments', icon: DollarSign }] : []),
-    // Services - everyone can see
-    { path: '/services', label: 'Services', icon: Settings },
     // Wages - everyone can see
     { path: '/wages', label: 'Wages', icon: Wallet },
   ];
@@ -103,7 +100,7 @@ const Navigation = () => {
                           : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
                       )}
                     >
-                      <gear className="h-4 w-4" />
+                      <Settings className="h-4 w-4" />
                       <span>Config</span>
                     </NavigationMenuTrigger>
                     <NavigationMenuContent>
