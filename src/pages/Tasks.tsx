@@ -416,12 +416,12 @@ const Tasks = () => {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="assignee">Assignee</Label>
-                    <Select value={newTask.assignee_id} onValueChange={(value) => setNewTask({...newTask, assignee_id: value})}>
+                    <Select value={newTask.assignee_id} onValueChange={(value) => setNewTask({...newTask, assignee_id: value === 'unassigned' ? '' : value})}>
                       <SelectTrigger>
                         <SelectValue placeholder="Select assignee (optional)" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">No assignee</SelectItem>
+                        <SelectItem value="unassigned">No assignee</SelectItem>
                         {employees.map((employee) => (
                           <SelectItem key={employee.id} value={employee.id}>
                             {employee.name}
@@ -489,12 +489,12 @@ const Tasks = () => {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="editAssignee">Assignee</Label>
-                  <Select value={editingTask.assignee_id || ''} onValueChange={(value) => setEditingTask({...editingTask, assignee_id: value || null})}>
+                  <Select value={editingTask.assignee_id || 'unassigned'} onValueChange={(value) => setEditingTask({...editingTask, assignee_id: value === 'unassigned' ? null : value})}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select assignee (optional)" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">No assignee</SelectItem>
+                      <SelectItem value="unassigned">No assignee</SelectItem>
                       {employees.map((employee) => (
                         <SelectItem key={employee.id} value={employee.id}>
                           {employee.name}
