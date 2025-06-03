@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -170,120 +169,121 @@ const Services = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
-      <Navigation />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Services</h1>
-            <p className="text-gray-600 mt-2">Manage your service offerings and hourly rates</p>
-          </div>
-          
-          {userRole === 'admin' && (
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-              <DialogTrigger asChild>
-                <Button className="bg-blue-600 hover:bg-blue-700" onClick={() => setEditingService(null)}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Service
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>
-                    {editingService ? 'Edit Service' : 'Add New Service'}
-                  </DialogTitle>
-                  <DialogDescription>
-                    {editingService ? 'Update service details' : 'Create a new service offering with hourly rate'}
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="serviceName">Service Name</Label>
-                    <Input
-                      id="serviceName"
-                      value={formData.name}
-                      onChange={(e) => setFormData({...formData, name: e.target.value})}
-                      placeholder="e.g., DevOps, Content Writing"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="description">Description</Label>
-                    <Textarea
-                      id="description"
-                      value={formData.description}
-                      onChange={(e) => setFormData({...formData, description: e.target.value})}
-                      placeholder="Describe the service..."
-                      rows={3}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="hourlyRate">Hourly Rate (₹)</Label>
-                    <Input
-                      id="hourlyRate"
-                      type="number"
-                      step="0.01"
-                      value={formData.hourly_rate}
-                      onChange={(e) => setFormData({...formData, hourly_rate: e.target.value})}
-                      placeholder="75.00"
-                    />
-                  </div>
-                  <div className="flex justify-end space-x-2">
-                    <Button variant="outline" onClick={resetForm}>
-                      Cancel
-                    </Button>
-                    <Button 
-                      onClick={handleSubmit}
-                      disabled={createServiceMutation.isPending || updateServiceMutation.isPending}
-                    >
-                      {editingService ? 'Update' : 'Create'} Service
-                    </Button>
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>
-          )}
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {services.map((service) => (
-            <Card key={service.id} className="hover:shadow-lg transition-shadow duration-200">
-              <CardHeader>
-                <div className="flex justify-between items-start">
-                  <CardTitle className="text-lg">{service.name}</CardTitle>
-                  {userRole === 'admin' && (
-                    <div className="flex space-x-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleEdit(service)}
-                      >
-                        <Edit className="h-4 w-4" />
+      <Navigation>
+        <div className="mb-8">
+          <div className="flex justify-between items-center mb-8">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">Services</h1>
+              <p className="text-gray-600 mt-2">Manage your service offerings and hourly rates</p>
+            </div>
+            
+            {userRole === 'admin' && (
+              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button className="bg-blue-600 hover:bg-blue-700" onClick={() => setEditingService(null)}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Service
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>
+                      {editingService ? 'Edit Service' : 'Add New Service'}
+                    </DialogTitle>
+                    <DialogDescription>
+                      {editingService ? 'Update service details' : 'Create a new service offering with hourly rate'}
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="serviceName">Service Name</Label>
+                      <Input
+                        id="serviceName"
+                        value={formData.name}
+                        onChange={(e) => setFormData({...formData, name: e.target.value})}
+                        placeholder="e.g., DevOps, Content Writing"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="description">Description</Label>
+                      <Textarea
+                        id="description"
+                        value={formData.description}
+                        onChange={(e) => setFormData({...formData, description: e.target.value})}
+                        placeholder="Describe the service..."
+                        rows={3}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="hourlyRate">Hourly Rate (₹)</Label>
+                      <Input
+                        id="hourlyRate"
+                        type="number"
+                        step="0.01"
+                        value={formData.hourly_rate}
+                        onChange={(e) => setFormData({...formData, hourly_rate: e.target.value})}
+                        placeholder="75.00"
+                      />
+                    </div>
+                    <div className="flex justify-end space-x-2">
+                      <Button variant="outline" onClick={resetForm}>
+                        Cancel
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDelete(service.id)}
+                      <Button 
+                        onClick={handleSubmit}
+                        disabled={createServiceMutation.isPending || updateServiceMutation.isPending}
                       >
-                        <Trash2 className="h-4 w-4 text-red-500" />
+                        {editingService ? 'Update' : 'Create'} Service
                       </Button>
                     </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {services.map((service) => (
+              <Card key={service.id} className="hover:shadow-lg transition-shadow duration-200">
+                <CardHeader>
+                  <div className="flex justify-between items-start">
+                    <CardTitle className="text-lg">{service.name}</CardTitle>
+                    {userRole === 'admin' && (
+                      <div className="flex space-x-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleEdit(service)}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDelete(service.id)}
+                        >
+                          <Trash2 className="h-4 w-4 text-red-500" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                  {service.description && (
+                    <CardDescription>{service.description}</CardDescription>
                   )}
-                </div>
-                {service.description && (
-                  <CardDescription>{service.description}</CardDescription>
-                )}
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center justify-between">
-                  <Badge variant="secondary" className="flex items-center space-x-1">
-                    <DollarSign className="h-3 w-3" />
-                    <span>₹{service.hourly_rate}/hour</span>
-                  </Badge>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center justify-between">
+                    <Badge variant="secondary" className="flex items-center space-x-1">
+                      <DollarSign className="h-3 w-3" />
+                      <span>₹{service.hourly_rate}/hour</span>
+                    </Badge>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </div>
-      </div>
+      </Navigation>
     </div>
   );
 };
