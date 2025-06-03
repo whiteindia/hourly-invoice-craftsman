@@ -1,9 +1,15 @@
+
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { logUserLogin } from '@/utils/activityLogger';
+import type { Database } from '@/integrations/supabase/types';
 
 type AppRole = Database['public']['Enums']['app_role'];
+
+interface AuthProviderProps {
+  children: React.ReactNode;
+}
 
 interface AuthContextType {
   user: User | null;
@@ -29,7 +35,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const [userRole, setUserRole] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState<AppRole | null>(null);
 
   const fetchUserRole = async (userId: string) => {
     try {
@@ -52,13 +58,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         const adminRole = data.find(r => r.role === 'admin');
         const role = adminRole ? adminRole.role : data[0].role;
         console.log('Selected role:', role);
+        setUserRole(role as AppRole);
         return role as AppRole;
       }
       
       console.log('No roles found for user');
+      setUserRole(null);
       return null;
     } catch (error) {
       console.error('Error fetching user role:', error);
+      setUserRole(null);
       return null;
     }
   };
