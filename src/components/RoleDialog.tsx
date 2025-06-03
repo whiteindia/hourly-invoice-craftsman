@@ -42,6 +42,33 @@ const RoleDialog: React.FC<RoleDialogProps> = ({ open, onClose, role, isEditing 
   const pages = ['dashboard', 'clients', 'employees', 'projects', 'tasks', 'invoices', 'payments', 'services', 'wages'];
   const operations: CrudOperation[] = ['create', 'read', 'update', 'delete'];
 
+  // Map of common role names to valid enum values
+  const roleMapping: Record<string, AppRole> = {
+    'admin': 'admin',
+    'administrator': 'admin',
+    'manager': 'manager',
+    'supervisor': 'manager',
+    'teamlead': 'teamlead',
+    'team-lead': 'teamlead',
+    'team lead': 'teamlead',
+    'lead': 'teamlead',
+    'associate': 'associate',
+    'employee': 'associate',
+    'staff': 'associate',
+    'worker': 'associate',
+    'sales-executive': 'associate',
+    'sales executive': 'associate',
+    'sales': 'associate',
+    'accountant': 'accountant',
+    'finance': 'accountant',
+    'accounting': 'accountant'
+  };
+
+  const getValidRole = (inputRole: string): AppRole | null => {
+    const normalized = inputRole.toLowerCase().trim();
+    return roleMapping[normalized] || null;
+  };
+
   useEffect(() => {
     if (open) {
       if (isEditing && role) {
@@ -109,10 +136,10 @@ const RoleDialog: React.FC<RoleDialogProps> = ({ open, onClose, role, isEditing 
       return;
     }
 
-    // Validate that the role name is one of the valid enum values
-    const validRoles: AppRole[] = ['admin', 'manager', 'teamlead', 'associate', 'accountant'];
-    if (!validRoles.includes(roleName as AppRole)) {
-      toast.error(`Role must be one of: ${validRoles.join(', ')}`);
+    // Get the valid enum role for the input
+    const validRole = getValidRole(roleName);
+    if (!validRole) {
+      toast.error(`Role "${roleName}" is not supported. Please use one of: admin, manager, teamlead, associate, accountant, sales-executive, or similar variations.`);
       return;
     }
 
@@ -139,18 +166,18 @@ const RoleDialog: React.FC<RoleDialogProps> = ({ open, onClose, role, isEditing 
         const { data: existingPrivileges, error: checkError } = await supabase
           .from('role_privileges')
           .select('*')
-          .eq('role', roleName as AppRole);
+          .eq('role', validRole);
 
         if (checkError) throw checkError;
 
         if (existingPrivileges && existingPrivileges.length > 0) {
-          toast.error(`Role ${roleName} already exists. Please edit the existing role instead.`);
+          toast.error(`Role type "${validRole}" already exists. Please edit the existing role instead.`);
           return;
         }
 
         // Create new role privileges
         const privilegesToInsert = privileges.map(p => ({
-          role: roleName as AppRole,
+          role: validRole,
           page_name: p.page_name,
           operation: p.operation,
           allowed: p.allowed
@@ -161,7 +188,7 @@ const RoleDialog: React.FC<RoleDialogProps> = ({ open, onClose, role, isEditing 
           .insert(privilegesToInsert);
 
         if (error) throw error;
-        toast.success('Role created successfully');
+        toast.success(`Role "${roleName}" created successfully (mapped to ${validRole})`);
       }
 
       onClose();
@@ -181,7 +208,8 @@ const RoleDialog: React.FC<RoleDialogProps> = ({ open, onClose, role, isEditing 
             {isEditing ? `Edit Role: ${role}` : 'Create New Role'}
           </DialogTitle>
           <DialogDescription>
-            Configure role permissions for different pages and operations. Valid roles: admin, manager, teamlead, associate, accountant
+            Configure role permissions for different pages and operations. 
+            Supported role names: admin, manager, teamlead, associate, accountant, sales-executive (and variations)
           </DialogDescription>
         </DialogHeader>
 
@@ -192,13 +220,18 @@ const RoleDialog: React.FC<RoleDialogProps> = ({ open, onClose, role, isEditing 
               id="roleName"
               value={roleName}
               onChange={(e) => setRoleName(e.target.value)}
-              placeholder="Enter role name (admin, manager, teamlead, associate, accountant)"
+              placeholder="Enter role name (e.g., sales-executive, admin, manager)"
               disabled={isEditing}
               className={isEditing ? "bg-gray-100" : ""}
             />
             <p className="text-sm text-gray-500">
-              Must be one of: admin, manager, teamlead, associate, accountant
+              Examples: admin, manager, teamlead, associate, accountant, sales-executive, supervisor, etc.
             </p>
+            {roleName && !isEditing && (
+              <p className="text-sm text-blue-600">
+                "{roleName}" will be mapped to: {getValidRole(roleName) || 'Invalid role name'}
+              </p>
+            )}
           </div>
 
           {loading ? (
