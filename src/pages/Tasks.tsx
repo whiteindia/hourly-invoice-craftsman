@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { Plus, CheckCircle, Clock, Filter, FileText, History, Edit, Play } from 'lucide-react';
+import { Plus, CheckCircle, Clock, Filter, FileText, History, Edit, Play, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -24,6 +23,8 @@ interface Task {
   status: 'Not Started' | 'In Progress' | 'Completed';
   hours: number;
   date: string;
+  deadline?: string | null;
+  estimated_duration?: number | null;
   invoiced: boolean;
   assignee_id: string | null;
   assigner_id: string | null;
@@ -63,7 +64,9 @@ const Tasks = () => {
     name: '',
     project_id: '',
     assignee_id: '',
-    date: new Date().toISOString().split('T')[0]
+    date: new Date().toISOString().split('T')[0],
+    deadline: '',
+    estimated_duration: ''
   });
 
   // Convert userRole to string for comparison
@@ -189,6 +192,29 @@ const Tasks = () => {
   // Check if user can see billing information
   const canSeeBilling = ['admin', 'accountant'].includes(roleString);
 
+  // Helper functions for deadline and duration status
+  const isOverdue = (task: Task) => {
+    if (!task.deadline || task.status === 'Completed') return false;
+    return new Date() > new Date(task.deadline);
+  };
+
+  const isDurationExceeded = (task: Task) => {
+    if (!task.estimated_duration || task.status === 'Completed') return false;
+    return task.hours > task.estimated_duration;
+  };
+
+  const getDateLag = (deadline: string) => {
+    const today = new Date();
+    const deadlineDate = new Date(deadline);
+    const diffTime = today.getTime() - deadlineDate.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays > 0 ? diffDays : 0;
+  };
+
+  const getDurationExcess = (actualHours: number, estimatedHours: number) => {
+    return actualHours > estimatedHours ? (actualHours - estimatedHours).toFixed(1) : 0;
+  };
+
   // Calculate total hours from time_entries
   const updateTaskHoursMutation = useMutation({
     mutationFn: async ({ taskId }: { taskId: string }) => {
@@ -223,7 +249,12 @@ const Tasks = () => {
       const { data, error } = await supabase
         .from('tasks')
         .insert([{
-          ...taskData,
+          name: taskData.name,
+          project_id: taskData.project_id,
+          assignee_id: taskData.assignee_id || null,
+          date: taskData.date,
+          deadline: taskData.deadline || null,
+          estimated_duration: taskData.estimated_duration ? parseFloat(taskData.estimated_duration) : null,
           assigner_id: currentEmployee?.id || null
         }])
         .select()
@@ -238,7 +269,9 @@ const Tasks = () => {
         name: '',
         project_id: '',
         assignee_id: '',
-        date: new Date().toISOString().split('T')[0]
+        date: new Date().toISOString().split('T')[0],
+        deadline: '',
+        estimated_duration: ''
       });
       setIsDialogOpen(false);
       toast.success('Task created successfully!');
@@ -309,7 +342,9 @@ const Tasks = () => {
         name: editingTask.name,
         project_id: editingTask.project_id,
         assignee_id: editingTask.assignee_id,
-        date: editingTask.date
+        date: editingTask.date,
+        deadline: editingTask.deadline,
+        estimated_duration: editingTask.estimated_duration
       }
     });
   };
@@ -349,7 +384,11 @@ const Tasks = () => {
   };
 
   const openEditDialog = (task: Task) => {
-    setEditingTask(task);
+    setEditingTask({
+      ...task,
+      deadline: task.deadline || '',
+      estimated_duration: task.estimated_duration || null
+    });
     setIsEditDialogOpen(true);
   };
 
@@ -382,14 +421,14 @@ const Tasks = () => {
                   Add Task
                 </Button>
               </DialogTrigger>
-              <DialogContent>
+              <DialogContent className="max-w-lg">
                 <DialogHeader>
                   <DialogTitle>Create New Task</DialogTitle>
                   <DialogDescription>
                     Add a new task to track your work progress.
                   </DialogDescription>
                 </DialogHeader>
-                <div className="space-y-4">
+                <div className="space-y-4 max-h-96 overflow-y-auto">
                   <div className="space-y-2">
                     <Label htmlFor="taskName">Task Name</Label>
                     <Input
@@ -439,6 +478,27 @@ const Tasks = () => {
                       onChange={(e) => setNewTask({...newTask, date: e.target.value})}
                     />
                   </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="deadline">Deadline (Optional)</Label>
+                    <Input
+                      id="deadline"
+                      type="date"
+                      value={newTask.deadline}
+                      onChange={(e) => setNewTask({...newTask, deadline: e.target.value})}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="estimatedDuration">Estimated Duration (Hours)</Label>
+                    <Input
+                      id="estimatedDuration"
+                      type="number"
+                      step="0.5"
+                      min="0"
+                      value={newTask.estimated_duration}
+                      onChange={(e) => setNewTask({...newTask, estimated_duration: e.target.value})}
+                      placeholder="Enter estimated hours"
+                    />
+                  </div>
                   <Button 
                     onClick={handleAddTask} 
                     className="w-full"
@@ -454,7 +514,7 @@ const Tasks = () => {
 
         {/* Edit Task Dialog */}
         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-          <DialogContent>
+          <DialogContent className="max-w-lg">
             <DialogHeader>
               <DialogTitle>Edit Task</DialogTitle>
               <DialogDescription>
@@ -462,7 +522,7 @@ const Tasks = () => {
               </DialogDescription>
             </DialogHeader>
             {editingTask && (
-              <div className="space-y-4">
+              <div className="space-y-4 max-h-96 overflow-y-auto">
                 <div className="space-y-2">
                   <Label htmlFor="editTaskName">Task Name</Label>
                   <Input
@@ -510,6 +570,27 @@ const Tasks = () => {
                     type="date"
                     value={editingTask.date}
                     onChange={(e) => setEditingTask({...editingTask, date: e.target.value})}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="editDeadline">Deadline (Optional)</Label>
+                  <Input
+                    id="editDeadline"
+                    type="date"
+                    value={editingTask.deadline || ''}
+                    onChange={(e) => setEditingTask({...editingTask, deadline: e.target.value})}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="editEstimatedDuration">Estimated Duration (Hours)</Label>
+                  <Input
+                    id="editEstimatedDuration"
+                    type="number"
+                    step="0.5"
+                    min="0"
+                    value={editingTask.estimated_duration || ''}
+                    onChange={(e) => setEditingTask({...editingTask, estimated_duration: e.target.value ? parseFloat(e.target.value) : null})}
+                    placeholder="Enter estimated hours"
                   />
                 </div>
                 <Button 
@@ -651,6 +732,8 @@ const Tasks = () => {
                   <TableHead>Assigner</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Hours</TableHead>
+                  <TableHead>Deadline</TableHead>
+                  <TableHead>Est. Duration</TableHead>
                   <TableHead>Date</TableHead>
                   {canSeeBilling && <TableHead>Billing</TableHead>}
                   <TableHead>Actions</TableHead>
@@ -659,7 +742,7 @@ const Tasks = () => {
               <TableBody>
                 {tasks.map((task) => (
                   <React.Fragment key={task.id}>
-                    <TableRow>
+                    <TableRow className={isOverdue(task) ? 'bg-red-50' : ''}>
                       <TableCell>
                         <Button
                           variant="ghost"
@@ -676,10 +759,35 @@ const Tasks = () => {
                       <TableCell>{task.assigner?.name || 'N/A'}</TableCell>
                       <TableCell>{getStatusBadge(task.status)}</TableCell>
                       <TableCell>
-                        <div className="flex items-center">
+                        <div className={`flex items-center ${isDurationExceeded(task) ? 'text-red-600' : ''}`}>
                           <Clock className="h-4 w-4 mr-1 text-gray-500" />
                           {task.hours}h
+                          {isDurationExceeded(task) && task.estimated_duration && (
+                            <span className="ml-1 text-xs">
+                              (+{getDurationExcess(task.hours, task.estimated_duration)}h)
+                            </span>
+                          )}
                         </div>
+                      </TableCell>
+                      <TableCell>
+                        {task.deadline ? (
+                          <div className={`flex items-center ${isOverdue(task) ? 'text-red-600' : ''}`}>
+                            {task.deadline}
+                            {isOverdue(task) && (
+                              <div className="ml-2 flex items-center">
+                                <AlertTriangle className="h-4 w-4 mr-1" />
+                                <span className="text-xs">
+                                  {getDateLag(task.deadline)}d overdue
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          'N/A'
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {task.estimated_duration ? `${task.estimated_duration}h` : 'N/A'}
                       </TableCell>
                       <TableCell>{task.date}</TableCell>
                       {canSeeBilling && (
@@ -726,7 +834,7 @@ const Tasks = () => {
                     </TableRow>
                     {expandedTasks.has(task.id) && (
                       <TableRow>
-                        <TableCell colSpan={canSeeBilling ? 11 : 10} className="bg-gray-50">
+                        <TableCell colSpan={canSeeBilling ? 13 : 12} className="bg-gray-50">
                           <div className="p-4">
                             <TaskHistory 
                               taskId={task.id} 
