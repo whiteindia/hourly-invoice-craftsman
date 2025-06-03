@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,14 +10,18 @@ import { Plus, DollarSign, Clock, User } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import type { Database } from '@/integrations/supabase/types';
+
+type ProjectType = Database['public']['Enums']['project_type'];
+type ProjectStatus = Database['public']['Enums']['project_status'];
 
 interface Project {
   id: string;
   name: string;
-  type: string;
+  type: ProjectType;
   hourly_rate: number;
   total_hours: number;
-  status: string;
+  status: ProjectStatus;
   clients: {
     name: string;
   };
@@ -34,12 +37,12 @@ const Projects = () => {
   const [newProject, setNewProject] = useState({
     name: '',
     client_id: '',
-    type: '',
+    type: '' as ProjectType | '',
     hourly_rate: ''
   });
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
-  const projectTypes = [
+  const projectTypes: { value: ProjectType; rate: number }[] = [
     { value: "DevOps", rate: 100 },
     { value: "Marketing", rate: 120 },
     { value: "Consulting", rate: 100 },
@@ -81,12 +84,12 @@ const Projects = () => {
     mutationFn: async (projectData: {
       name: string;
       client_id: string;
-      type: string;
+      type: ProjectType;
       hourly_rate: number;
     }) => {
       const { data, error } = await supabase
         .from('projects')
-        .insert([projectData])
+        .insert(projectData)
         .select()
         .single();
       
@@ -104,7 +107,7 @@ const Projects = () => {
     }
   });
 
-  const handleProjectTypeChange = (type: string) => {
+  const handleProjectTypeChange = (type: ProjectType) => {
     const projectType = projectTypes.find(pt => pt.value === type);
     setNewProject({
       ...newProject,
@@ -122,7 +125,7 @@ const Projects = () => {
     addProjectMutation.mutate({
       name: newProject.name,
       client_id: newProject.client_id,
-      type: newProject.type as any,
+      type: newProject.type as ProjectType,
       hourly_rate: parseFloat(newProject.hourly_rate)
     });
   };

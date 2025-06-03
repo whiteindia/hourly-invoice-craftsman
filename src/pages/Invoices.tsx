@@ -11,13 +11,16 @@ import { Plus, FileText, Download, Eye, DollarSign } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import type { Database } from '@/integrations/supabase/types';
+
+type InvoiceStatus = Database['public']['Enums']['invoice_status'];
 
 interface Invoice {
   id: string;
   amount: number;
   hours: number;
   rate: number;
-  status: string;
+  status: InvoiceStatus;
   date: string;
   due_date: string;
   clients: {
@@ -191,7 +194,7 @@ const Invoices = () => {
 
   // Update invoice status mutation
   const updateInvoiceStatusMutation = useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: string }) => {
+    mutationFn: async ({ id, status }: { id: string; status: InvoiceStatus }) => {
       const { data, error } = await supabase
         .from('invoices')
         .update({ status })
@@ -263,7 +266,7 @@ const Invoices = () => {
     }
   };
 
-  const updateInvoiceStatus = (invoiceId: string, newStatus: string) => {
+  const updateInvoiceStatus = (invoiceId: string, newStatus: InvoiceStatus) => {
     updateInvoiceStatusMutation.mutate({ id: invoiceId, status: newStatus });
   };
 
