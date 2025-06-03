@@ -15,7 +15,8 @@ import {
   Wallet,
   Menu,
   ChevronDown,
-  User
+  User,
+  Calendar
 } from 'lucide-react';
 import {
   Drawer,
@@ -47,6 +48,7 @@ const Navigation = ({ children }: { children?: React.ReactNode }) => {
     { path: '/', label: 'Dashboard', icon: Home, pageName: 'dashboard' },
     { path: '/projects', label: 'Projects', icon: FolderOpen, pageName: 'projects' },
     { path: '/tasks', label: 'Tasks', icon: CheckSquare, pageName: 'tasks' },
+    { path: '/sprints', label: 'Sprints', icon: Calendar, pageName: 'sprints' },
     { path: '/invoices', label: 'Invoices', icon: FileText, pageName: 'invoices' },
     { path: '/payments', label: 'Payments', icon: DollarSign, pageName: 'payments' },
     { path: '/wages', label: 'Wages', icon: Wallet, pageName: 'wages' },
