@@ -225,19 +225,13 @@ const Navigation = ({ children }: { children?: React.ReactNode }) => {
           <div className="flex items-center space-x-4">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="flex items-center gap-2 px-2 py-2">
+                <Button variant="ghost" size="icon" className="rounded-full">
                   <Avatar className="h-8 w-8">
                     <AvatarImage src="" />
                     <AvatarFallback className="bg-blue-100 text-blue-700">
                       {user?.email ? getInitials(user.email) : 'U'}
                     </AvatarFallback>
                   </Avatar>
-                  <div className="hidden md:flex flex-col items-start">
-                    <span className="text-sm text-gray-600 truncate max-w-32">
-                      {user?.email}
-                    </span>
-                  </div>
-                  <ChevronDown className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="bg-white border shadow-lg z-50 w-48">
@@ -288,7 +282,7 @@ const Navigation = ({ children }: { children?: React.ReactNode }) => {
   return (
     <div className="min-h-screen w-full">
       <DesktopNavigation />
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
         {children}
       </main>
     </div>
