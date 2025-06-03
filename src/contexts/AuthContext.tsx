@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -66,16 +67,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      (event, session) => {
         console.log('Auth state changed:', event, session?.user?.email);
         setSession(session);
         setUser(session?.user ?? null);
         
         if (session?.user) {
-          // Fetch user role when user is authenticated
-          const role = await fetchUserRole(session.user.id);
-          setUserRole(role);
-          setLoading(false);
+          // Fetch user role when user is authenticated - use setTimeout to avoid callback issues
+          setTimeout(async () => {
+            try {
+              const role = await fetchUserRole(session.user.id);
+              setUserRole(role);
+            } catch (error) {
+              console.error('Error in fetchUserRole:', error);
+              setUserRole(null);
+            } finally {
+              setLoading(false);
+            }
+          }, 0);
         } else {
           setUserRole(null);
           setLoading(false);
@@ -92,6 +101,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (session?.user) {
         fetchUserRole(session.user.id).then(role => {
           setUserRole(role);
+          setLoading(false);
+        }).catch(error => {
+          console.error('Error in initial fetchUserRole:', error);
+          setUserRole(null);
           setLoading(false);
         });
       } else {
