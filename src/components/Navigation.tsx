@@ -41,7 +41,7 @@ import { usePrivileges } from '@/hooks/usePrivileges';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
 
-const Navigation = ({ children }: { children: React.ReactNode }) => {
+const Navigation = ({ children }: { children?: React.ReactNode }) => {
   const { signOut, user } = useAuth();
   const { hasPageAccess, loading: privilegesLoading } = usePrivileges();
   const location = useLocation();
@@ -84,7 +84,7 @@ const Navigation = ({ children }: { children: React.ReactNode }) => {
     );
   }
 
-  const SidebarMenu = () => (
+  const SidebarMenuContent = () => (
     <>
       <SidebarHeader className="border-b">
         <Link to="/" className="text-xl font-bold text-blue-600 p-4">
@@ -168,7 +168,7 @@ const Navigation = ({ children }: { children: React.ReactNode }) => {
               </DrawerTrigger>
               <DrawerContent>
                 <div className="h-[80vh]">
-                  <SidebarMenu />
+                  <SidebarMenuContent />
                 </div>
               </DrawerContent>
             </Drawer>
@@ -185,7 +185,7 @@ const Navigation = ({ children }: { children: React.ReactNode }) => {
     <SidebarProvider>
       <div className="min-h-screen flex w-full">
         <Sidebar>
-          <SidebarMenu />
+          <SidebarMenuContent />
         </Sidebar>
         <SidebarInset>
           <header className="bg-white shadow-sm border-b sticky top-0 z-50">
