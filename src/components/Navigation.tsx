@@ -14,7 +14,8 @@ import {
   LogOut,
   Wallet,
   Menu,
-  ChevronDown
+  ChevronDown,
+  User
 } from 'lucide-react';
 import {
   Drawer,
@@ -27,6 +28,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from '@/components/ui/avatar';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePrivileges } from '@/hooks/usePrivileges';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -73,6 +79,10 @@ const Navigation = ({ children }: { children?: React.ReactNode }) => {
       </div>
     );
   }
+
+  const getInitials = (email: string) => {
+    return email.substring(0, 2).toUpperCase();
+  };
 
   const MobileMenuContent = () => (
     <div className="p-4 space-y-6">
@@ -133,8 +143,16 @@ const Navigation = ({ children }: { children?: React.ReactNode }) => {
       </div>
 
       <div className="border-t pt-4 space-y-2">
-        <div className="text-sm text-gray-600 truncate">
-          {user?.email}
+        <div className="flex items-center gap-3 mb-3">
+          <Avatar className="h-8 w-8">
+            <AvatarImage src="" />
+            <AvatarFallback className="bg-blue-100 text-blue-700">
+              {user?.email ? getInitials(user.email) : 'U'}
+            </AvatarFallback>
+          </Avatar>
+          <div className="text-sm text-gray-600 truncate">
+            {user?.email}
+          </div>
         </div>
         <Button variant="outline" onClick={signOut} className="w-full">
           <LogOut className="h-4 w-4 mr-2" />
@@ -205,13 +223,33 @@ const Navigation = ({ children }: { children?: React.ReactNode }) => {
           </div>
 
           <div className="flex items-center space-x-4">
-            <span className="hidden md:block text-sm text-gray-600">
-              {user?.email}
-            </span>
-            <Button variant="outline" onClick={signOut} className="hidden md:flex">
-              <LogOut className="h-4 w-4 mr-2" />
-              Sign Out
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="flex items-center gap-2 px-2 py-2">
+                  <Avatar className="h-8 w-8">
+                    <AvatarImage src="" />
+                    <AvatarFallback className="bg-blue-100 text-blue-700">
+                      {user?.email ? getInitials(user.email) : 'U'}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="hidden md:flex flex-col items-start">
+                    <span className="text-sm text-gray-600 truncate max-w-32">
+                      {user?.email}
+                    </span>
+                  </div>
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="bg-white border shadow-lg z-50 w-48">
+                <div className="px-3 py-2 border-b">
+                  <p className="text-sm text-gray-600 truncate">{user?.email}</p>
+                </div>
+                <DropdownMenuItem onClick={signOut} className="cursor-pointer">
+                  <LogOut className="h-4 w-4 mr-2" />
+                  <span>Sign Out</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </div>
