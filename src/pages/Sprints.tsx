@@ -79,9 +79,6 @@ const Sprints = () => {
                 clients (
                   name
                 )
-              ),
-              employees:assignee_id (
-                name
               )
             )
           `)
@@ -89,10 +86,44 @@ const Sprints = () => {
 
         if (tasksError) throw tasksError;
 
-        const tasks = sprintTasks.map(st => st.tasks).filter(Boolean) as Task[];
+        // Process tasks and add employee data separately
+        const tasks: Task[] = [];
+        
+        for (const st of sprintTasks) {
+          if (st.tasks) {
+            const task = st.tasks as any;
+            let employeeData = null;
+            
+            // Fetch employee data if assignee_id exists
+            if (task.assignee_id) {
+              const { data: employee } = await supabase
+                .from('employees')
+                .select('name')
+                .eq('id', task.assignee_id)
+                .single();
+              
+              if (employee) {
+                employeeData = { name: employee.name };
+              }
+            }
+            
+            tasks.push({
+              id: task.id,
+              name: task.name,
+              status: task.status as 'Not Started' | 'In Progress' | 'Completed',
+              project_id: task.project_id,
+              assignee_id: task.assignee_id,
+              deadline: task.deadline,
+              hours: task.hours,
+              projects: task.projects,
+              employees: employeeData
+            });
+          }
+        }
         
         sprintsWithTasks.push({
           ...sprint,
+          status: sprint.status as 'Not Started' | 'In Progress' | 'Completed',
           tasks
         });
       }
@@ -149,10 +180,10 @@ const Sprints = () => {
     const sprint = sprints.find(s => s.id === sprintId);
     if (sprint) {
       const updatedTasks = sprint.tasks.map(t => 
-        t.id === taskId ? { ...t, status: newStatus as any } : t
+        t.id === taskId ? { ...t, status: newStatus as 'Not Started' | 'In Progress' | 'Completed' } : t
       );
       
-      let sprintStatus = 'Not Started';
+      let sprintStatus: 'Not Started' | 'In Progress' | 'Completed' = 'Not Started';
       if (updatedTasks.every(t => t.status === 'Completed')) {
         sprintStatus = 'Completed';
       } else if (updatedTasks.some(t => t.status === 'In Progress' || t.status === 'Completed')) {
