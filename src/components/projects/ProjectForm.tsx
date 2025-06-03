@@ -320,12 +320,12 @@ const ProjectForm = ({
               </div>
               <div className="space-y-2">
                 <Label htmlFor="editAssignee">Assignee</Label>
-                <Select onValueChange={(value) => onSetEditingProject({...editingProject, assignee_id: value})}>
+                <Select onValueChange={(value) => onSetEditingProject({...editingProject, assignee_id: value === "unassigned" ? null : value})}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select an assignee (optional)" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Unassigned</SelectItem>
+                    <SelectItem value="unassigned">Unassigned</SelectItem>
                     {assignees.map((assignee) => (
                       <SelectItem key={assignee.id} value={assignee.id}>
                         {assignee.full_name}
