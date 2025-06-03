@@ -31,9 +31,17 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
+    console.log('Edge function called - checking environment variables');
+    const apiKey = Deno.env.get("RESEND_API_KEY");
+    if (!apiKey) {
+      console.error('RESEND_API_KEY is not set');
+      throw new Error('RESEND_API_KEY environment variable is not configured');
+    }
+    console.log('RESEND_API_KEY is configured');
+
     const { email, role, invitedBy, employeeData, clientData }: InvitationEmailRequest = await req.json();
 
-    console.log('Sending invitation email to:', email);
+    console.log('Sending invitation email to:', email, 'with role:', role);
 
     const isClient = role === 'client';
     const userData = isClient ? clientData : employeeData;
@@ -82,15 +90,9 @@ const handler = async (req: Request): Promise<Response> => {
                 </ul>
               `}
               
-              <p>To get started, you'll need to set up your password by clicking the button below:</p>
+              <p>To get started, please contact your administrator to set up your account.</p>
               
-              <div style="text-align: center;">
-                <a href="https://ljmdbrunpuhnnmouuuzg.supabase.co/auth/v1/verify?type=signup&token_hash=placeholder&redirect_to=https://your-app-url.com" class="button">
-                  Set Up Your Password
-                </a>
-              </div>
-              
-              <p><strong>Important:</strong> This invitation link will expire in 7 days for security reasons.</p>
+              <p><strong>Important:</strong> This invitation was sent to confirm your registration in our system.</p>
               
               <p>If you have any questions, please don't hesitate to reach out to our support team.</p>
               
@@ -105,6 +107,8 @@ const handler = async (req: Request): Promise<Response> => {
       </html>
     `;
 
+    console.log('Attempting to send email via Resend...');
+    
     const emailResponse = await resend.emails.send({
       from: "Your Platform <onboarding@resend.dev>",
       to: [email],
@@ -116,7 +120,8 @@ const handler = async (req: Request): Promise<Response> => {
 
     return new Response(JSON.stringify({ 
       success: true, 
-      messageId: emailResponse.data?.id 
+      messageId: emailResponse.data?.id,
+      message: "Email sent successfully"
     }), {
       status: 200,
       headers: {
@@ -126,10 +131,17 @@ const handler = async (req: Request): Promise<Response> => {
     });
   } catch (error: any) {
     console.error("Error sending invitation email:", error);
+    console.error("Error details:", {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
+    
     return new Response(
       JSON.stringify({ 
         success: false, 
-        error: error.message 
+        error: error.message,
+        details: "Check the edge function logs for more information"
       }),
       {
         status: 500,

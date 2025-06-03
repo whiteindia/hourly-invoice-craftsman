@@ -1,7 +1,7 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 
 interface Invitation {
   id: string;
@@ -45,6 +45,7 @@ export const useInvitations = () => {
         throw new Error('User not authenticated');
       }
 
+      console.log('Creating invitation record...');
       const { data, error } = await supabase
         .from('invitations')
         .insert([{
@@ -54,10 +55,16 @@ export const useInvitations = () => {
         .select()
         .single();
       
-      if (error) throw error;
+      if (error) {
+        console.error('Failed to create invitation record:', error);
+        throw error;
+      }
+      
+      console.log('Invitation record created successfully:', data);
       
       // Send actual email notification
       try {
+        console.log('Preparing to send email...');
         const emailPayload = {
           email: invitationData.email,
           role: invitationData.role,
@@ -69,6 +76,8 @@ export const useInvitations = () => {
           })
         };
 
+        console.log('Invoking send-invitation-email function with payload:', emailPayload);
+
         const { data: emailResponse, error: emailError } = await supabase.functions.invoke(
           'send-invitation-email',
           {
@@ -78,20 +87,33 @@ export const useInvitations = () => {
 
         if (emailError) {
           console.error('Failed to send invitation email:', emailError);
-          throw new Error('Failed to send invitation email: ' + emailError.message);
+          toast.error('Invitation created but email failed to send: ' + emailError.message);
+          // Don't throw here - invitation was created successfully
+          return data;
+        }
+
+        if (!emailResponse?.success) {
+          console.error('Email function returned error:', emailResponse);
+          toast.error('Invitation created but email failed to send: ' + (emailResponse?.error || 'Unknown error'));
+          return data;
         }
 
         console.log('Invitation email sent successfully:', emailResponse);
+        toast.success('Invitation created and email sent successfully!');
       } catch (emailError) {
         console.error('Email sending error:', emailError);
+        toast.error('Invitation created but email failed to send: ' + (emailError as Error).message);
         // Don't throw here - invitation was created successfully, just email failed
-        console.log('Invitation created but email failed to send');
       }
       
       return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['invitations'] });
+    },
+    onError: (error) => {
+      console.error('Failed to create invitation:', error);
+      toast.error('Failed to create invitation: ' + error.message);
     }
   });
 
