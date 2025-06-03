@@ -37,6 +37,7 @@ const Projects = () => {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<any>(null);
+  const [projectBasis, setProjectBasis] = useState('Hourly');
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -87,8 +88,8 @@ const Projects = () => {
         .from('projects')
         .insert([{
           ...projectData,
-          hourly_rate: projectData.type === 'BRD' ? 0 : Number(projectData.hourly_rate),
-          project_amount: projectData.type === 'BRD' ? Number(projectData.project_amount) : 0
+          hourly_rate: projectBasis === 'Hourly' ? Number(projectData.hourly_rate) : 0,
+          project_amount: projectBasis === 'BRD' ? Number(projectData.project_amount) : 0
         }])
         .select()
         .single();
@@ -116,12 +117,13 @@ const Projects = () => {
 
   const updateProjectMutation = useMutation({
     mutationFn: async ({ id, ...projectData }: any) => {
+      const isBRD = projectData.brd_file_url && projectData.brd_file_url.trim() !== '';
       const { data, error } = await supabase
         .from('projects')
         .update({
           ...projectData,
-          hourly_rate: projectData.type === 'BRD' ? 0 : Number(projectData.hourly_rate),
-          project_amount: projectData.type === 'BRD' ? Number(projectData.project_amount) : 0
+          hourly_rate: isBRD ? 0 : Number(projectData.hourly_rate),
+          project_amount: isBRD ? Number(projectData.project_amount) : 0
         })
         .eq('id', id)
         .select()
@@ -160,6 +162,7 @@ const Projects = () => {
       status: 'Active',
       brd_file_url: ''
     });
+    setProjectBasis('Hourly');
     setEditingProject(null);
   };
 
@@ -174,6 +177,8 @@ const Projects = () => {
 
   const openEditDialog = (project: any) => {
     setEditingProject(project);
+    const isBRD = project.brd_file_url && project.brd_file_url.trim() !== '';
+    setProjectBasis(isBRD ? 'BRD' : 'Hourly');
     setFormData({
       name: project.name,
       client_id: project.client_id,
@@ -189,7 +194,7 @@ const Projects = () => {
   };
 
   const handleBRDClick = (brdUrl: string) => {
-    if (brdUrl) {
+    if (brdUrl && brdUrl.trim() !== '') {
       window.open(brdUrl, '_blank');
     } else {
       toast({
@@ -201,10 +206,15 @@ const Projects = () => {
   };
 
   const getTotalValue = (project: any) => {
-    if (project.type === 'BRD') {
-      return `₹${project.project_amount || 0}`;
+    const isBRD = project.brd_file_url && project.brd_file_url.trim() !== '';
+    if (isBRD && project.project_amount > 0) {
+      return `₹${project.project_amount}`;
     }
     return `₹${project.hourly_rate}/hr`;
+  };
+
+  const isBRDProject = (project: any) => {
+    return project.brd_file_url && project.brd_file_url.trim() !== '';
   };
 
   return (
@@ -276,12 +286,13 @@ const Projects = () => {
                 <div>
                   <Label htmlFor="project_basis">Project Basis</Label>
                   <Select
-                    value={formData.type === 'BRD' ? 'BRD' : 'Hourly'}
+                    value={projectBasis}
                     onValueChange={(value) => {
+                      setProjectBasis(value);
                       if (value === 'BRD') {
                         setFormData({ ...formData, hourly_rate: '0' });
                       } else {
-                        setFormData({ ...formData, project_amount: '0' });
+                        setFormData({ ...formData, project_amount: '0', brd_file_url: '' });
                       }
                     }}
                   >
@@ -295,10 +306,10 @@ const Projects = () => {
                   </Select>
                 </div>
 
-                {formData.type === 'BRD' ? (
+                {projectBasis === 'BRD' ? (
                   <>
                     <div>
-                      <Label htmlFor="project_amount">Total Project Value (₹)</Label>
+                      <Label htmlFor="project_amount">Project Amount (₹)</Label>
                       <Input
                         id="project_amount"
                         type="number"
@@ -315,6 +326,7 @@ const Projects = () => {
                         value={formData.brd_file_url}
                         onChange={(e) => setFormData({ ...formData, brd_file_url: e.target.value })}
                         placeholder="https://example.com/document.pdf"
+                        required
                       />
                     </div>
                   </>
@@ -407,13 +419,13 @@ const Projects = () => {
                   </div>
                   
                   <div className="flex items-center justify-between">
-                    {project.brd_file_url ? (
+                    {isBRDProject(project) ? (
                       <div 
                         className="flex items-center space-x-2 cursor-pointer text-blue-600 hover:text-blue-800"
                         onClick={() => handleBRDClick(project.brd_file_url)}
                       >
                         <FileText className="h-4 w-4" />
-                        <span className="text-sm font-medium">View BRD Document</span>
+                        <span className="text-sm font-medium">View BRD</span>
                       </div>
                     ) : (
                       <div className="flex items-center space-x-1">
@@ -426,6 +438,13 @@ const Projects = () => {
                       <span className="text-sm">{project.total_hours}h</span>
                     </div>
                   </div>
+
+                  {isBRDProject(project) && (
+                    <div className="flex items-center space-x-1">
+                      <DollarSign className="h-4 w-4 text-green-600" />
+                      <span className="text-sm font-medium">₹{project.project_amount}</span>
+                    </div>
+                  )}
 
                   {project.deadline && (
                     <div className="flex items-center space-x-1">
@@ -446,7 +465,7 @@ const Projects = () => {
               <DialogTitle>Edit Project</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Same form fields as create dialog */}
+              {/* Same form fields as create dialog with edit prefixes */}
               <div>
                 <Label htmlFor="edit_name">Project Name</Label>
                 <Input
@@ -495,10 +514,33 @@ const Projects = () => {
                 </Select>
               </div>
 
-              {formData.brd_file_url ? (
+              <div>
+                <Label htmlFor="edit_project_basis">Project Basis</Label>
+                <Select
+                  value={projectBasis}
+                  onValueChange={(value) => {
+                    setProjectBasis(value);
+                    if (value === 'BRD') {
+                      setFormData({ ...formData, hourly_rate: '0' });
+                    } else {
+                      setFormData({ ...formData, project_amount: '0', brd_file_url: '' });
+                    }
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select project basis" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Hourly">Hourly Based</SelectItem>
+                    <SelectItem value="BRD">BRD Based</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {projectBasis === 'BRD' ? (
                 <>
                   <div>
-                    <Label htmlFor="edit_project_amount">Total Project Value (₹)</Label>
+                    <Label htmlFor="edit_project_amount">Project Amount (₹)</Label>
                     <Input
                       id="edit_project_amount"
                       type="number"
@@ -515,6 +557,7 @@ const Projects = () => {
                       value={formData.brd_file_url}
                       onChange={(e) => setFormData({ ...formData, brd_file_url: e.target.value })}
                       placeholder="https://example.com/document.pdf"
+                      required
                     />
                   </div>
                 </>
