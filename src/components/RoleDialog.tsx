@@ -11,7 +11,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { Database } from '@/integrations/supabase/types';
@@ -35,22 +34,21 @@ interface RoleDialogProps {
 }
 
 const RoleDialog: React.FC<RoleDialogProps> = ({ open, onClose, role, isEditing }) => {
-  const [selectedRole, setSelectedRole] = useState<AppRole>('associate');
+  const [roleName, setRoleName] = useState('');
   const [privileges, setPrivileges] = useState<Privilege[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const pages = ['dashboard', 'clients', 'employees', 'projects', 'tasks', 'invoices', 'payments', 'services', 'wages'];
   const operations: CrudOperation[] = ['create', 'read', 'update', 'delete'];
-  const availableRoles: AppRole[] = ['admin', 'manager', 'teamlead', 'associate', 'accountant'];
 
   useEffect(() => {
     if (open) {
       if (isEditing && role) {
-        setSelectedRole(role);
+        setRoleName(role);
         fetchRolePrivileges(role);
       } else {
-        setSelectedRole('associate');
+        setRoleName('');
         initializeDefaultPrivileges();
       }
     }
@@ -81,7 +79,7 @@ const RoleDialog: React.FC<RoleDialogProps> = ({ open, onClose, role, isEditing 
     pages.forEach(page => {
       operations.forEach(operation => {
         defaultPrivileges.push({
-          role: selectedRole,
+          role: 'associate', // Default role, will be updated when user enters role name
           page_name: page,
           operation,
           allowed: false
@@ -99,13 +97,25 @@ const RoleDialog: React.FC<RoleDialogProps> = ({ open, onClose, role, isEditing 
     setPrivileges(prev => 
       prev.map(p => 
         p.page_name === page && p.operation === operation 
-          ? { ...p, allowed, role: selectedRole } 
+          ? { ...p, allowed } 
           : p
       )
     );
   };
 
   const handleSave = async () => {
+    if (!roleName.trim()) {
+      toast.error('Role name is required');
+      return;
+    }
+
+    // Validate that the role name is one of the valid enum values
+    const validRoles: AppRole[] = ['admin', 'manager', 'teamlead', 'associate', 'accountant'];
+    if (!validRoles.includes(roleName as AppRole)) {
+      toast.error(`Role must be one of: ${validRoles.join(', ')}`);
+      return;
+    }
+
     setSaving(true);
     try {
       if (isEditing && role) {
@@ -129,18 +139,18 @@ const RoleDialog: React.FC<RoleDialogProps> = ({ open, onClose, role, isEditing 
         const { data: existingPrivileges, error: checkError } = await supabase
           .from('role_privileges')
           .select('*')
-          .eq('role', selectedRole);
+          .eq('role', roleName as AppRole);
 
         if (checkError) throw checkError;
 
         if (existingPrivileges && existingPrivileges.length > 0) {
-          toast.error(`Role ${selectedRole} already exists. Please edit the existing role instead.`);
+          toast.error(`Role ${roleName} already exists. Please edit the existing role instead.`);
           return;
         }
 
         // Create new role privileges
         const privilegesToInsert = privileges.map(p => ({
-          role: selectedRole,
+          role: roleName as AppRole,
           page_name: p.page_name,
           operation: p.operation,
           allowed: p.allowed
@@ -171,38 +181,24 @@ const RoleDialog: React.FC<RoleDialogProps> = ({ open, onClose, role, isEditing 
             {isEditing ? `Edit Role: ${role}` : 'Create New Role'}
           </DialogTitle>
           <DialogDescription>
-            Configure role permissions for different pages and operations
+            Configure role permissions for different pages and operations. Valid roles: admin, manager, teamlead, associate, accountant
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6">
           <div className="space-y-2">
-            <Label htmlFor="roleName">Role</Label>
-            {isEditing ? (
-              <Input
-                id="roleName"
-                value={selectedRole}
-                disabled
-                className="bg-gray-100"
-              />
-            ) : (
-              <Select value={selectedRole} onValueChange={(value: AppRole) => {
-                setSelectedRole(value);
-                // Update all privileges with the new role
-                setPrivileges(prev => prev.map(p => ({ ...p, role: value })));
-              }}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a role" />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableRoles.map(roleOption => (
-                    <SelectItem key={roleOption} value={roleOption}>
-                      {roleOption.charAt(0).toUpperCase() + roleOption.slice(1)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
+            <Label htmlFor="roleName">Role Name</Label>
+            <Input
+              id="roleName"
+              value={roleName}
+              onChange={(e) => setRoleName(e.target.value)}
+              placeholder="Enter role name (admin, manager, teamlead, associate, accountant)"
+              disabled={isEditing}
+              className={isEditing ? "bg-gray-100" : ""}
+            />
+            <p className="text-sm text-gray-500">
+              Must be one of: admin, manager, teamlead, associate, accountant
+            </p>
           </div>
 
           {loading ? (
