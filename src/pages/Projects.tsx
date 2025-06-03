@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -7,18 +8,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Edit, Trash2, Eye, Filter, Upload, FileText, ExternalLink } from 'lucide-react';
+import { Plus, Edit, Trash2, Upload, FileText, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { Database } from '@/integrations/supabase/types';
 import Navigation from '@/components/Navigation';
-import { logActivity } from '@/utils/activityLogger';
 
-type ProjectStatus = Database['public']['Enums']['project_status'];
 type ProjectType = Database['public']['Enums']['project_type'];
+type ProjectStatus = Database['public']['Enums']['project_status'];
 
-interface Project {
+interface ProjectData {
   id: string;
   name: string;
   client_id: string;
@@ -27,10 +27,11 @@ interface Project {
   project_amount: number | null;
   total_hours: number;
   status: ProjectStatus;
+  start_date: string | null;
   deadline: string | null;
   brd_file_url: string | null;
   created_at: string;
-  clients?: {
+  clients: {
     name: string;
   };
 }
@@ -40,30 +41,23 @@ interface Client {
   name: string;
 }
 
-interface Service {
-  id: string;
-  name: string;
-}
-
 const Projects = () => {
   const queryClient = useQueryClient();
   const [newProject, setNewProject] = useState({
     name: '',
     client_id: '',
-    type: 'DevOps' as ProjectType,
+    type: 'Hourly' as ProjectType,
     hourly_rate: 0,
     project_amount: 0,
-    total_hours: 0,
-    status: 'Active' as ProjectStatus,
+    start_date: '',
     deadline: '',
-    brd_file_url: ''
+    brd_file: null as File | null
   });
-  const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [editingProject, setEditingProject] = useState<ProjectData | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [globalServiceFilter, setGlobalServiceFilter] = useState<string>('all');
   const [uploadingBRD, setUploadingBRD] = useState(false);
-  const [editUploadingBRD, setEditUploadingBRD] = useState(false);
+  const [editBrdFile, setEditBrdFile] = useState<File | null>(null);
 
   // Fetch projects with client data
   const { data: projects = [], isLoading } = useQuery({
@@ -78,7 +72,7 @@ const Projects = () => {
         .order('created_at', { ascending: false });
       
       if (error) throw error;
-      return data as Project[];
+      return data as ProjectData[];
     }
   });
 
@@ -88,7 +82,7 @@ const Projects = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('clients')
-        .select('*')
+        .select('id, name')
         .order('name');
       
       if (error) throw error;
@@ -96,96 +90,25 @@ const Projects = () => {
     }
   });
 
-  // Fetch services for dropdown
-  const { data: services = [] } = useQuery({
-    queryKey: ['services'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('services')
-        .select('*')
-        .order('name');
-      
-      if (error) throw error;
-      return data as Service[];
-    }
-  });
-
-  // Handle BRD file upload for new project
-  const handleBRDUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    if (file.type !== 'application/pdf') {
-      toast.error('Please upload a PDF file');
-      return;
-    }
-
-    setUploadingBRD(true);
-    try {
-      const fileExt = 'pdf';
-      const fileName = `brd-${Date.now()}.${fileExt}`;
-      
-      const { data, error } = await supabase.storage
-        .from('project-files')
-        .upload(fileName, file);
-
-      if (error) throw error;
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('project-files')
-        .getPublicUrl(fileName);
-
-      setNewProject({ ...newProject, brd_file_url: publicUrl });
-      toast.success('BRD file uploaded successfully');
-    } catch (error: any) {
-      toast.error('Failed to upload BRD file: ' + error.message);
-    } finally {
-      setUploadingBRD(false);
-    }
+  // Function to upload BRD file
+  const uploadBRDFile = async (file: File, projectId: string) => {
+    const fileExt = file.name.split('.').pop();
+    const fileName = `brd-${projectId}-${Date.now()}.${fileExt}`;
+    
+    const { data, error } = await supabase.storage
+      .from('project-files')
+      .upload(fileName, file);
+    
+    if (error) throw error;
+    
+    const { data: { publicUrl } } = supabase.storage
+      .from('project-files')
+      .getPublicUrl(fileName);
+    
+    return publicUrl;
   };
 
-  // Handle BRD file upload for edit project
-  const handleEditBRDUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file || !editingProject) return;
-
-    if (file.type !== 'application/pdf') {
-      toast.error('Please upload a PDF file');
-      return;
-    }
-
-    setEditUploadingBRD(true);
-    try {
-      const fileExt = 'pdf';
-      const fileName = `brd-${Date.now()}.${fileExt}`;
-      
-      const { data, error } = await supabase.storage
-        .from('project-files')
-        .upload(fileName, file);
-
-      if (error) throw error;
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('project-files')
-        .getPublicUrl(fileName);
-
-      setEditingProject({ ...editingProject, brd_file_url: publicUrl });
-      toast.success('BRD file uploaded successfully');
-    } catch (error: any) {
-      toast.error('Failed to upload BRD file: ' + error.message);
-    } finally {
-      setEditUploadingBRD(false);
-    }
-  };
-
-  // View BRD file
-  const viewBRD = (url: string) => {
-    if (url) {
-      window.open(url, '_blank');
-    }
-  };
-
-  // Create project mutation
+  // Mutation to create a new project
   const createProjectMutation = useMutation({
     mutationFn: async (projectData: any) => {
       const { data, error } = await supabase
@@ -195,33 +118,42 @@ const Projects = () => {
         .single();
       
       if (error) throw error;
-
-      // Log activity
-      await logActivity({
-        action_type: 'created',
-        entity_type: 'project',
-        entity_id: data.id,
-        entity_name: data.name,
-        description: `Created project ${data.name} for ${clients.find(c => c.id === data.client_id)?.name}`,
-        comment: `Hourly rate: ₹${data.hourly_rate}`
-      });
+      
+      // Upload BRD file if provided
+      if (newProject.brd_file && projectData.type === 'BRD') {
+        try {
+          setUploadingBRD(true);
+          const brdUrl = await uploadBRDFile(newProject.brd_file, data.id);
+          
+          const { error: updateError } = await supabase
+            .from('projects')
+            .update({ brd_file_url: brdUrl })
+            .eq('id', data.id);
+          
+          if (updateError) throw updateError;
+        } catch (uploadError) {
+          console.error('BRD upload failed:', uploadError);
+          toast.error('Project created but BRD upload failed');
+        } finally {
+          setUploadingBRD(false);
+        }
+      }
       
       return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
-      setIsDialogOpen(false);
       setNewProject({
         name: '',
         client_id: '',
-        type: 'DevOps',
+        type: 'Hourly',
         hourly_rate: 0,
         project_amount: 0,
-        total_hours: 0,
-        status: 'Active',
+        start_date: '',
         deadline: '',
-        brd_file_url: ''
+        brd_file: null
       });
+      setIsDialogOpen(false);
       toast.success('Project created successfully!');
     },
     onError: (error) => {
@@ -229,34 +161,39 @@ const Projects = () => {
     }
   });
 
-  // Update project mutation
+  // Mutation to update an existing project
   const updateProjectMutation = useMutation({
-    mutationFn: async (projectData: any) => {
+    mutationFn: async ({ id, ...updates }: { id: string } & any) => {
+      // Handle BRD file upload for edit
+      if (editBrdFile && editingProject?.type === 'BRD') {
+        try {
+          setUploadingBRD(true);
+          const brdUrl = await uploadBRDFile(editBrdFile, id);
+          updates.brd_file_url = brdUrl;
+        } catch (uploadError) {
+          console.error('BRD upload failed:', uploadError);
+          toast.error('BRD upload failed');
+          throw uploadError;
+        } finally {
+          setUploadingBRD(false);
+        }
+      }
+
       const { data, error } = await supabase
         .from('projects')
-        .update(projectData)
-        .eq('id', projectData.id)
+        .update(updates)
+        .eq('id', id)
         .select()
         .single();
       
       if (error) throw error;
-
-      // Log activity
-      await logActivity({
-        action_type: 'updated',
-        entity_type: 'project',
-        entity_id: data.id,
-        entity_name: data.name,
-        description: `Updated project ${data.name} for ${clients.find(c => c.id === data.client_id)?.name}`,
-        comment: `Hourly rate: ₹${data.hourly_rate}`
-      });
-      
       return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
-      setIsEditDialogOpen(false);
       setEditingProject(null);
+      setEditBrdFile(null);
+      setIsEditDialogOpen(false);
       toast.success('Project updated successfully!');
     },
     onError: (error) => {
@@ -264,29 +201,15 @@ const Projects = () => {
     }
   });
 
-  // Delete project mutation
+  // Mutation to delete a project
   const deleteProjectMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('projects')
         .delete()
-        .eq('id', id)
-        .select()
-        .single();
+        .eq('id', id);
       
       if (error) throw error;
-
-      // Log activity
-      await logActivity({
-        action_type: 'deleted',
-        entity_type: 'project',
-        entity_id: data.id,
-        entity_name: data.name,
-        description: `Deleted project ${data.name} for ${clients.find(c => c.id === data.client_id)?.name}`,
-        comment: `Hourly rate: ₹${data.hourly_rate}`
-      });
-      
-      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
@@ -297,74 +220,41 @@ const Projects = () => {
     }
   });
 
-  // Determine if project is hourly or project-based
-  const isProjectBased = (type: ProjectType) => {
-    return type === 'BRD';
-  };
-
-  // Filter projects based on global service filter
-  const filteredProjects = projects.filter(project => {
-    if (globalServiceFilter === 'all') return true;
-    
-    // Map project types to service names for filtering
-    // This is a simplified mapping - you may need to adjust based on your actual service-project relationship
-    const serviceProjectMapping: Record<string, string[]> = {
-      'DevOps': ['DevOps'],
-      'Marketing': ['Marketing'],
-      'Consulting': ['Consulting'],
-      'Strategy': ['Strategy'],
-      'Technical Writing': ['Technical Writing'],
-      'BRD': ['BRD']
+  const handleCreateProject = () => {
+    const projectData = {
+      name: newProject.name,
+      client_id: newProject.client_id,
+      type: newProject.type,
+      hourly_rate: newProject.hourly_rate,
+      project_amount: newProject.type === 'BRD' ? newProject.project_amount : null,
+      start_date: newProject.start_date || null,
+      deadline: newProject.type === 'BRD' && newProject.deadline ? newProject.deadline : null
     };
-    
-    const selectedService = services.find(s => s.id === globalServiceFilter);
-    if (!selectedService) return true;
-    
-    const mappedTypes = serviceProjectMapping[selectedService.name] || [];
-    return mappedTypes.includes(project.type);
-  });
-
-  const handleCreateProject = async () => {
-    try {
-      await createProjectMutation.mutateAsync(newProject);
-    } catch (error: any) {
-      toast.error(error.message);
-    }
+    createProjectMutation.mutate(projectData);
   };
 
-  const handleUpdateProject = async () => {
-    if (!editingProject) return;
-    try {
-      await updateProjectMutation.mutateAsync({
+  const handleUpdateProject = () => {
+    if (editingProject) {
+      const updates = {
         id: editingProject.id,
-        ...editingProject
-      });
-    } catch (error: any) {
-      toast.error(error.message);
+        name: editingProject.name,
+        client_id: editingProject.client_id,
+        type: editingProject.type,
+        hourly_rate: editingProject.hourly_rate,
+        project_amount: editingProject.type === 'BRD' ? editingProject.project_amount : null,
+        start_date: editingProject.start_date || null,
+        deadline: editingProject.type === 'BRD' && editingProject.deadline ? editingProject.deadline : null
+      };
+      updateProjectMutation.mutate(updates);
     }
   };
 
-  const handleDeleteProject = async (id: string) => {
-    try {
-      await deleteProjectMutation.mutateAsync(id);
-    } catch (error: any) {
-      toast.error(error.message);
-    }
+  const handleDeleteProject = (id: string) => {
+    deleteProjectMutation.mutate(id);
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'Active':
-        return 'bg-green-100 text-green-800';
-      case 'Inactive':
-        return 'bg-red-100 text-red-800';
-      case 'On Hold':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'Completed':
-        return 'bg-blue-100 text-blue-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
+  const openBRDFile = (url: string) => {
+    window.open(url, '_blank');
   };
 
   if (isLoading) {
@@ -386,183 +276,128 @@ const Projects = () => {
             <p className="text-gray-600 mt-2">Manage your client projects</p>
           </div>
           
-          <div className="flex items-center space-x-4">
-            {/* Global Service Filter */}
-            <div className="flex items-center space-x-2">
-              <Filter className="h-4 w-4 text-gray-500" />
-              <Select value={globalServiceFilter} onValueChange={setGlobalServiceFilter}>
-                <SelectTrigger className="w-48">
-                  <SelectValue placeholder="Filter by service" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Services</SelectItem>
-                  {services.map((service) => (
-                    <SelectItem key={service.id} value={service.id}>
-                      {service.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-        {/* Add Project Dialog */}
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="bg-blue-600 hover:bg-blue-700">
-              <Plus className="h-4 w-4 mr-2" />
-              Add Project
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Create New Project</DialogTitle>
-              <DialogDescription>
-                Add a new project to track your work.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Project Name</Label>
-                <Input
-                  id="name"
-                  placeholder="Project name"
-                  value={newProject.name}
-                  onChange={(e) => setNewProject({ ...newProject, name: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="client">Client</Label>
-                <Select value={newProject.client_id} onValueChange={(value) => setNewProject({ ...newProject, client_id: value })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a client" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {clients.map((client) => (
-                      <SelectItem key={client.id} value={client.id}>
-                        {client.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="type">Project Type</Label>
-                <Select value={newProject.type} onValueChange={(value) => setNewProject({ ...newProject, type: value as ProjectType })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="DevOps">DevOps</SelectItem>
-                    <SelectItem value="Marketing">Marketing</SelectItem>
-                    <SelectItem value="Consulting">Consulting</SelectItem>
-                    <SelectItem value="Strategy">Strategy</SelectItem>
-                    <SelectItem value="Technical Writing">Technical Writing</SelectItem>
-                    <SelectItem value="BRD">BRD (Project-based)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Conditional fields based on project type */}
-              {isProjectBased(newProject.type) ? (
-                <>
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="bg-blue-600 hover:bg-blue-700">
+                <Plus className="h-4 w-4 mr-2" />
+                Add Project
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>Create New Project</DialogTitle>
+                <DialogDescription>
+                  Add a new project for a client.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name">Project Name</Label>
+                  <Input
+                    id="name"
+                    placeholder="Project name"
+                    value={newProject.name}
+                    onChange={(e) => setNewProject({ ...newProject, name: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="client">Client</Label>
+                  <Select value={newProject.client_id} onValueChange={(value) => setNewProject({ ...newProject, client_id: value })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a client" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {clients.map((client) => (
+                        <SelectItem key={client.id} value={client.id}>
+                          {client.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="type">Project Type</Label>
+                  <Select value={newProject.type} onValueChange={(value) => setNewProject({ ...newProject, type: value as ProjectType })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select project type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Hourly">Hourly</SelectItem>
+                      <SelectItem value="BRD">BRD (Project-based)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                {newProject.type === 'Hourly' && (
                   <div className="space-y-2">
-                    <Label htmlFor="project_amount">Project Amount</Label>
+                    <Label htmlFor="hourly_rate">Hourly Rate (₹)</Label>
                     <Input
-                      id="project_amount"
+                      id="hourly_rate"
                       type="number"
-                      placeholder="Total project amount"
-                      value={newProject.project_amount.toString()}
-                      onChange={(e) => setNewProject({ ...newProject, project_amount: parseFloat(e.target.value) || 0 })}
+                      placeholder="Hourly rate"
+                      value={newProject.hourly_rate}
+                      onChange={(e) => setNewProject({ ...newProject, hourly_rate: Number(e.target.value) })}
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="total_hours">Estimated Total Hours</Label>
-                    <Input
-                      id="total_hours"
-                      type="number"
-                      placeholder="Estimated hours for completion"
-                      value={newProject.total_hours.toString()}
-                      onChange={(e) => setNewProject({ ...newProject, total_hours: parseFloat(e.target.value) || 0 })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="deadline">Project Deadline</Label>
-                    <Input
-                      id="deadline"
-                      type="date"
-                      value={newProject.deadline}
-                      onChange={(e) => setNewProject({ ...newProject, deadline: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="brd_file">BRD Document (PDF)</Label>
-                    <div className="flex items-center space-x-2">
+                )}
+
+                {newProject.type === 'BRD' && (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="project_amount">Project Amount (₹)</Label>
+                      <Input
+                        id="project_amount"
+                        type="number"
+                        placeholder="Total project amount"
+                        value={newProject.project_amount}
+                        onChange={(e) => setNewProject({ ...newProject, project_amount: Number(e.target.value) })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="deadline">Deadline</Label>
+                      <Input
+                        id="deadline"
+                        type="date"
+                        value={newProject.deadline}
+                        onChange={(e) => setNewProject({ ...newProject, deadline: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="brd_file">BRD Document</Label>
                       <Input
                         id="brd_file"
                         type="file"
-                        accept=".pdf"
-                        onChange={handleBRDUpload}
-                        disabled={uploadingBRD}
+                        accept=".pdf,.doc,.docx"
+                        onChange={(e) => setNewProject({ ...newProject, brd_file: e.target.files?.[0] || null })}
                       />
-                      {uploadingBRD && <div className="text-sm text-gray-500">Uploading...</div>}
                     </div>
-                    {newProject.brd_file_url && (
-                      <div className="flex items-center space-x-2 mt-2">
-                        <FileText className="h-4 w-4 text-green-600" />
-                        <span className="text-sm text-green-600">BRD uploaded successfully</span>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => viewBRD(newProject.brd_file_url)}
-                        >
-                          <Eye className="h-4 w-4 mr-1" />
-                          View
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                </>
-              ) : (
+                  </>
+                )}
+
                 <div className="space-y-2">
-                  <Label htmlFor="hourly_rate">Hourly Rate</Label>
+                  <Label htmlFor="start_date">Start Date</Label>
                   <Input
-                    id="hourly_rate"
-                    type="number"
-                    placeholder="Hourly rate"
-                    value={newProject.hourly_rate.toString()}
-                    onChange={(e) => setNewProject({ ...newProject, hourly_rate: parseFloat(e.target.value) || 0 })}
+                    id="start_date"
+                    type="date"
+                    value={newProject.start_date}
+                    onChange={(e) => setNewProject({ ...newProject, start_date: e.target.value })}
                   />
                 </div>
-              )}
 
-              <div className="space-y-2">
-                <Label htmlFor="status">Status</Label>
-                <Select value={newProject.status} onValueChange={(value) => setNewProject({ ...newProject, status: value as ProjectStatus })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Active">Active</SelectItem>
-                    <SelectItem value="Inactive">Inactive</SelectItem>
-                    <SelectItem value="On Hold">On Hold</SelectItem>
-                    <SelectItem value="Completed">Completed</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Button onClick={handleCreateProject} className="w-full" disabled={uploadingBRD}>
+                  {uploadingBRD ? 'Uploading BRD...' : 'Create Project'}
+                </Button>
               </div>
-              <Button onClick={handleCreateProject} className="w-full" disabled={createProjectMutation.isPending}>
-                {createProjectMutation.isPending ? 'Creating...' : 'Create Project'}
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+            </DialogContent>
+          </Dialog>
+        </div>
 
-        {/* Projects Table */}
+        {/* Projects List */}
         <Card>
           <CardHeader>
-            <CardTitle>All Projects</CardTitle>
+            <CardTitle>Projects ({projects.length})</CardTitle>
             <CardDescription>
-              {filteredProjects.length} project{filteredProjects.length !== 1 ? 's' : ''} 
-              {globalServiceFilter !== 'all' && ` filtered by ${services.find(s => s.id === globalServiceFilter)?.name}`}
+              All projects and their details
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -573,65 +408,57 @@ const Projects = () => {
                   <TableHead>Client</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Rate/Amount</TableHead>
-                  <TableHead>Deadline</TableHead>
+                  <TableHead>Total Hours</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Deadline</TableHead>
                   <TableHead>BRD</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredProjects.map((project) => (
+                {projects.map((project) => (
                   <TableRow key={project.id}>
                     <TableCell className="font-medium">{project.name}</TableCell>
                     <TableCell>{project.clients?.name}</TableCell>
                     <TableCell>
-                      <Badge variant="outline">
-                        {project.type} {isProjectBased(project.type) && '(Project-based)'}
+                      <Badge className={project.type === 'Hourly' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}>
+                        {project.type}
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      {isProjectBased(project.type) ? (
-                        <div>
-                          <div className="font-medium">₹{project.project_amount || 0}</div>
-                          <div className="text-sm text-gray-500">{project.total_hours}h estimated</div>
-                        </div>
-                      ) : (
-                        <div>₹{project.hourly_rate}/hr</div>
-                      )}
+                      {project.type === 'Hourly' ? `₹${project.hourly_rate}/hr` : `₹${project.project_amount || 0}`}
                     </TableCell>
+                    <TableCell>{project.total_hours}</TableCell>
                     <TableCell>
-                      {project.deadline ? (
-                        <div className="text-sm">
-                          {new Date(project.deadline).toLocaleDateString()}
-                        </div>
-                      ) : (
-                        <span className="text-gray-400">No deadline</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={getStatusColor(project.status)}>
+                      <Badge className={
+                        project.status === 'Active' ? 'bg-green-100 text-green-800' : 
+                        project.status === 'Completed' ? 'bg-blue-100 text-blue-800' :
+                        'bg-gray-100 text-gray-800'
+                      }>
                         {project.status}
                       </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {project.deadline ? new Date(project.deadline).toLocaleDateString() : 'N/A'}
                     </TableCell>
                     <TableCell>
                       {project.brd_file_url ? (
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => viewBRD(project.brd_file_url!)}
-                          className="text-blue-600 hover:text-blue-800"
+                          onClick={() => openBRDFile(project.brd_file_url!)}
                         >
-                          <FileText className="h-4 w-4 mr-1" />
-                          View BRD
+                          <Eye className="h-4 w-4 mr-1" />
+                          View
                         </Button>
                       ) : (
-                        <span className="text-gray-400 text-sm">No BRD</span>
+                        'N/A'
                       )}
                     </TableCell>
                     <TableCell>
                       <div className="flex space-x-2">
-                        <Button 
-                          variant="outline" 
+                        <Button
+                          variant="outline"
                           size="sm"
                           onClick={() => {
                             setEditingProject(project);
@@ -640,8 +467,8 @@ const Projects = () => {
                         >
                           <Edit className="h-4 w-4" />
                         </Button>
-                        <Button 
-                          variant="outline" 
+                        <Button
+                          variant="outline"
                           size="sm"
                           onClick={() => handleDeleteProject(project.id)}
                           className="text-red-600 hover:text-red-700"
@@ -663,142 +490,135 @@ const Projects = () => {
             <DialogHeader>
               <DialogTitle>Edit Project</DialogTitle>
               <DialogDescription>
-                Edit project details.
+                Update project details.
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Project Name</Label>
-                <Input
-                  id="name"
-                  placeholder="Project name"
-                  value={editingProject?.name || ''}
-                  onChange={(e) => setEditingProject({ ...editingProject!, name: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="client">Client</Label>
-                <Select value={editingProject?.client_id || ''} onValueChange={(value) => setEditingProject({ ...editingProject!, client_id: value })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a client" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {clients.map((client) => (
-                      <SelectItem key={client.id} value={client.id}>
-                        {client.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="type">Project Type</Label>
-                <Select value={editingProject?.type || ''} onValueChange={(value) => setEditingProject({ ...editingProject!, type: value as ProjectType })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="DevOps">DevOps</SelectItem>
-                    <SelectItem value="Marketing">Marketing</SelectItem>
-                    <SelectItem value="Consulting">Consulting</SelectItem>
-                    <SelectItem value="Strategy">Strategy</SelectItem>
-                    <SelectItem value="Technical Writing">Technical Writing</SelectItem>
-                    <SelectItem value="BRD">BRD</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              {/* Conditional fields based on project type */}
-              {editingProject && isProjectBased(editingProject.type) ? (
-                <>
-                  <div className="space-y-2">
-                    <Label htmlFor="edit_project_amount">Project Amount</Label>
-                    <Input
-                      id="edit_project_amount"
-                      type="number"
-                      placeholder="Total project amount"
-                      value={editingProject?.project_amount?.toString() || ''}
-                      onChange={(e) => setEditingProject({ ...editingProject!, project_amount: parseFloat(e.target.value) || 0 })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="edit_total_hours">Estimated Total Hours</Label>
-                    <Input
-                      id="edit_total_hours"
-                      type="number"
-                      placeholder="Estimated hours for completion"
-                      value={editingProject?.total_hours?.toString() || ''}
-                      onChange={(e) => setEditingProject({ ...editingProject!, total_hours: parseFloat(e.target.value) || 0 })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="edit_deadline">Project Deadline</Label>
-                    <Input
-                      id="edit_deadline"
-                      type="date"
-                      value={editingProject?.deadline || ''}
-                      onChange={(e) => setEditingProject({ ...editingProject!, deadline: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="edit_brd_file">BRD Document (PDF)</Label>
-                    <div className="flex items-center space-x-2">
-                      <Input
-                        id="edit_brd_file"
-                        type="file"
-                        accept=".pdf"
-                        onChange={handleEditBRDUpload}
-                        disabled={editUploadingBRD}
-                      />
-                      {editUploadingBRD && <div className="text-sm text-gray-500">Uploading...</div>}
-                    </div>
-                    {editingProject?.brd_file_url && (
-                      <div className="flex items-center space-x-2 mt-2">
-                        <FileText className="h-4 w-4 text-green-600" />
-                        <span className="text-sm text-green-600">BRD uploaded</span>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => viewBRD(editingProject.brd_file_url!)}
-                        >
-                          <Eye className="h-4 w-4 mr-1" />
-                          View
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                </>
-              ) : (
+            {editingProject && (
+              <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="edit_hourly_rate">Hourly Rate</Label>
+                  <Label htmlFor="edit-name">Project Name</Label>
                   <Input
-                    id="edit_hourly_rate"
-                    type="number"
-                    placeholder="Hourly rate"
-                    value={editingProject?.hourly_rate?.toString() || ''}
-                    onChange={(e) => setEditingProject({ ...editingProject!, hourly_rate: parseFloat(e.target.value) || 0 })}
+                    id="edit-name"
+                    placeholder="Project name"
+                    value={editingProject.name}
+                    onChange={(e) => setEditingProject({ ...editingProject, name: e.target.value })}
                   />
                 </div>
-              )}
+                <div className="space-y-2">
+                  <Label htmlFor="edit-client">Client</Label>
+                  <Select value={editingProject.client_id} onValueChange={(value) => setEditingProject({ ...editingProject, client_id: value })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a client" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {clients.map((client) => (
+                        <SelectItem key={client.id} value={client.id}>
+                          {client.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-type">Project Type</Label>
+                  <Select value={editingProject.type} onValueChange={(value) => setEditingProject({ ...editingProject, type: value as ProjectType })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select project type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Hourly">Hourly</SelectItem>
+                      <SelectItem value="BRD">BRD (Project-based)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                {editingProject.type === 'Hourly' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-hourly-rate">Hourly Rate (₹)</Label>
+                    <Input
+                      id="edit-hourly-rate"
+                      type="number"
+                      placeholder="Hourly rate"
+                      value={editingProject.hourly_rate}
+                      onChange={(e) => setEditingProject({ ...editingProject, hourly_rate: Number(e.target.value) })}
+                    />
+                  </div>
+                )}
 
-              <div className="space-y-2">
-                <Label htmlFor="status">Status</Label>
-                <Select value={editingProject?.status || ''} onValueChange={(value) => setEditingProject({ ...editingProject!, status: value as ProjectStatus })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Active">Active</SelectItem>
-                    <SelectItem value="Inactive">Inactive</SelectItem>
-                    <SelectItem value="On Hold">On Hold</SelectItem>
-                    <SelectItem value="Completed">Completed</SelectItem>
-                  </SelectContent>
-                </Select>
+                {editingProject.type === 'BRD' && (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-project-amount">Project Amount (₹)</Label>
+                      <Input
+                        id="edit-project-amount"
+                        type="number"
+                        placeholder="Total project amount"
+                        value={editingProject.project_amount || 0}
+                        onChange={(e) => setEditingProject({ ...editingProject, project_amount: Number(e.target.value) })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-deadline">Deadline</Label>
+                      <Input
+                        id="edit-deadline"
+                        type="date"
+                        value={editingProject.deadline || ''}
+                        onChange={(e) => setEditingProject({ ...editingProject, deadline: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-brd-file">Update BRD Document</Label>
+                      <Input
+                        id="edit-brd-file"
+                        type="file"
+                        accept=".pdf,.doc,.docx"
+                        onChange={(e) => setEditBrdFile(e.target.files?.[0] || null)}
+                      />
+                      {editingProject.brd_file_url && (
+                        <div className="text-sm text-gray-600">
+                          Current BRD: 
+                          <Button
+                            variant="link"
+                            className="text-blue-600 p-0 ml-1"
+                            onClick={() => openBRDFile(editingProject.brd_file_url!)}
+                          >
+                            View existing BRD
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit-start-date">Start Date</Label>
+                  <Input
+                    id="edit-start-date"
+                    type="date"
+                    value={editingProject.start_date || ''}
+                    onChange={(e) => setEditingProject({ ...editingProject, start_date: e.target.value })}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit-status">Status</Label>
+                  <Select value={editingProject.status} onValueChange={(value) => setEditingProject({ ...editingProject, status: value as ProjectStatus })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Active">Active</SelectItem>
+                      <SelectItem value="Completed">Completed</SelectItem>
+                      <SelectItem value="On Hold">On Hold</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <Button onClick={handleUpdateProject} className="w-full" disabled={uploadingBRD}>
+                  {uploadingBRD ? 'Uploading BRD...' : 'Update Project'}
+                </Button>
               </div>
-              <Button onClick={handleUpdateProject} className="w-full" disabled={updateProjectMutation.isPending}>
-                {updateProjectMutation.isPending ? 'Updating...' : 'Update Project'}
-              </Button>
-            </div>
+            )}
           </DialogContent>
         </Dialog>
       </div>

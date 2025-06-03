@@ -8,14 +8,22 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Edit, Trash2, Play, Pause, Check, MessageCircle, Clock, Filter } from 'lucide-react';
+import { Plus, Edit, Trash2, Play, Pause, Check, MessageCircle, Clock, Filter, History } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { Database } from '@/integrations/supabase/types';
 import Navigation from '@/components/Navigation';
 import TaskCommentDialog from '@/components/TaskCommentDialog';
+import TimeTrackerWithComment from '@/components/TimeTrackerWithComment';
+import TaskHistory from '@/components/TaskHistory';
 import { logActivity } from '@/utils/activityLogger';
+import { useIsMobile } from '@/hooks/use-mobile';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 
 type TaskStatus = Database['public']['Enums']['task_status'];
 
@@ -65,6 +73,7 @@ interface Service {
 
 const Tasks = () => {
   const queryClient = useQueryClient();
+  const isMobile = useIsMobile();
   const [newTask, setNewTask] = useState({
     name: '',
     project_id: '',
@@ -82,6 +91,7 @@ const Tasks = () => {
   const [assigneeFilter, setAssigneeFilter] = useState('all');
   const [assignerFilter, setAssignerFilter] = useState('all');
   const [globalServiceFilter, setGlobalServiceFilter] = useState<string>('all');
+  const [expandedHistories, setExpandedHistories] = useState<Set<string>>(new Set());
 
   // Fetch tasks with project and employee data including employee services, client data, and assigner data
   const { data: tasks = [], isLoading } = useQuery({
@@ -284,6 +294,16 @@ const Tasks = () => {
     deleteTaskMutation.mutate(id);
   };
 
+  const toggleHistory = (taskId: string) => {
+    const newExpanded = new Set(expandedHistories);
+    if (newExpanded.has(taskId)) {
+      newExpanded.delete(taskId);
+    } else {
+      newExpanded.add(taskId);
+    }
+    setExpandedHistories(newExpanded);
+  };
+
   if (isLoading) {
     return (
       <Navigation>
@@ -294,6 +314,209 @@ const Tasks = () => {
     );
   }
 
+  // Mobile view with cards
+  if (isMobile) {
+    return (
+      <Navigation>
+        <div className="px-4 py-6 space-y-4">
+          <div className="flex justify-between items-center">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Tasks</h1>
+              <p className="text-gray-600 text-sm mt-1">Track and manage your project tasks</p>
+            </div>
+            
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" className="bg-blue-600 hover:bg-blue-700">
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="mx-4 max-w-[calc(100vw-2rem)]">
+                <DialogHeader>
+                  <DialogTitle>Create New Task</DialogTitle>
+                  <DialogDescription>
+                    Add a new task to a project.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Task Name</Label>
+                    <Input
+                      id="name"
+                      placeholder="Task name"
+                      value={newTask.name}
+                      onChange={(e) => setNewTask({ ...newTask, name: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="project">Project</Label>
+                    <Select value={newTask.project_id} onValueChange={(value) => setNewTask({ ...newTask, project_id: value })}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a project" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {projects.map((project) => (
+                          <SelectItem key={project.id} value={project.id}>
+                            {project.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="assignee">Assignee</Label>
+                    <Select value={newTask.assignee_id} onValueChange={(value) => setNewTask({ ...newTask, assignee_id: value })}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select an assignee" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {employees.map((employee) => (
+                          <SelectItem key={employee.id} value={employee.id}>
+                            {employee.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button onClick={handleCreateTask} className="w-full">
+                    Create Task
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
+
+          {/* Mobile Filters */}
+          <Card className="p-4">
+            <div className="space-y-3">
+              <Input
+                placeholder="Search tasks..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full"
+              />
+              <div className="grid grid-cols-2 gap-2">
+                <Select value={selectedProject} onValueChange={setSelectedProject}>
+                  <SelectTrigger className="text-xs">
+                    <SelectValue placeholder="Project" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Projects</SelectItem>
+                    {projects.map((project) => (
+                      <SelectItem key={project.id} value={project.id}>
+                        {project.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="text-xs">
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Status</SelectItem>
+                    <SelectItem value="Not Started">Not Started</SelectItem>
+                    <SelectItem value="In Progress">In Progress</SelectItem>
+                    <SelectItem value="Completed">Completed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </Card>
+
+          {/* Mobile Task Cards */}
+          <div className="space-y-3">
+            {filteredTasks.map((task) => (
+              <Card key={task.id} className="p-4">
+                <div className="space-y-3">
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-medium text-sm truncate">{task.name}</h3>
+                      <p className="text-xs text-gray-500 truncate">{task.projects?.name}</p>
+                      <p className="text-xs text-gray-500">{task.employees?.name}</p>
+                    </div>
+                    <Badge className={
+                      task.status === 'Not Started' ? 'bg-gray-100 text-gray-800 text-xs' :
+                      task.status === 'In Progress' ? 'bg-blue-100 text-blue-800 text-xs' :
+                      'bg-green-100 text-green-800 text-xs'
+                    }>
+                      {task.status}
+                    </Badge>
+                  </div>
+
+                  {/* Time Tracker */}
+                  <div className="flex items-center justify-between">
+                    <TimeTrackerWithComment
+                      task={{ id: task.id, name: task.name }}
+                      onSuccess={() => queryClient.invalidateQueries({ queryKey: ['tasks'] })}
+                    />
+                    <span className="text-xs text-gray-500">{task.hours}h logged</span>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex justify-between items-center pt-2 border-t">
+                    <div className="flex space-x-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setEditingTask(task);
+                          setIsEditDialogOpen(true);
+                        }}
+                        className="text-xs"
+                      >
+                        <Edit className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedTaskForComment(task);
+                          setIsCommentDialogOpen(true);
+                        }}
+                        className="text-xs"
+                      >
+                        <MessageCircle className="h-3 w-3" />
+                      </Button>
+                    </div>
+                    
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => toggleHistory(task.id)}
+                      className="text-xs"
+                    >
+                      <History className="h-3 w-3 mr-1" />
+                      History
+                    </Button>
+                  </div>
+
+                  {/* Collapsible History */}
+                  <Collapsible open={expandedHistories.has(task.id)}>
+                    <CollapsibleContent className="pt-3 border-t">
+                      <TaskHistory
+                        taskId={task.id}
+                        onUpdate={() => queryClient.invalidateQueries({ queryKey: ['tasks'] })}
+                      />
+                    </CollapsibleContent>
+                  </Collapsible>
+                </div>
+              </Card>
+            ))}
+          </div>
+
+          {filteredTasks.length === 0 && (
+            <div className="text-center py-8 text-gray-500">
+              No tasks found matching your filters.
+            </div>
+          )}
+        </div>
+      </Navigation>
+    );
+  }
+
+  // Desktop view with table
   return (
     <Navigation>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
