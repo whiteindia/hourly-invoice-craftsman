@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -28,8 +27,30 @@ const Wages = () => {
     assignee: '',
     project: '',
     client: '',
-    status: ''
+    status: '',
+    year: '',
+    month: ''
   });
+
+  // Generate year options (current year and previous 5 years)
+  const currentYear = new Date().getFullYear();
+  const yearOptions = Array.from({ length: 6 }, (_, i) => currentYear - i);
+
+  // Month options
+  const monthOptions = [
+    { value: '01', label: 'January' },
+    { value: '02', label: 'February' },
+    { value: '03', label: 'March' },
+    { value: '04', label: 'April' },
+    { value: '05', label: 'May' },
+    { value: '06', label: 'June' },
+    { value: '07', label: 'July' },
+    { value: '08', label: 'August' },
+    { value: '09', label: 'September' },
+    { value: '10', label: 'October' },
+    { value: '11', label: 'November' },
+    { value: '12', label: 'December' },
+  ];
 
   const { data: wageTasks = [], isLoading } = useQuery({
     queryKey: ['wage-tasks', filters],
@@ -56,6 +77,17 @@ const Wages = () => {
       }
       if (filters.status && filters.status !== 'all') {
         query = query.eq('wage_status', filters.status);
+      }
+      if (filters.year && filters.year !== 'all') {
+        const startDate = `${filters.year}-01-01`;
+        const endDate = `${filters.year}-12-31`;
+        query = query.gte('date', startDate).lte('date', endDate);
+      }
+      if (filters.month && filters.month !== 'all' && filters.year && filters.year !== 'all') {
+        const startDate = `${filters.year}-${filters.month}-01`;
+        const daysInMonth = new Date(parseInt(filters.year), parseInt(filters.month), 0).getDate();
+        const endDate = `${filters.year}-${filters.month}-${daysInMonth.toString().padStart(2, '0')}`;
+        query = query.gte('date', startDate).lte('date', endDate);
       }
 
       const { data, error } = await query;
@@ -112,7 +144,7 @@ const Wages = () => {
   });
 
   const clearFilters = () => {
-    setFilters({ assignee: '', project: '', client: '', status: '' });
+    setFilters({ assignee: '', project: '', client: '', status: '', year: '', month: '' });
   };
 
   const groupedTasks = wageTasks.reduce((acc, task) => {
@@ -159,7 +191,43 @@ const Wages = () => {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+            <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
+              <div className="space-y-2">
+                <Label>Year</Label>
+                <Select value={filters.year} onValueChange={(value) => setFilters({...filters, year: value, month: value === 'all' ? '' : filters.month})}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All years" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All years</SelectItem>
+                    {yearOptions.map((year) => (
+                      <SelectItem key={year} value={year.toString()}>
+                        {year}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Month</Label>
+                <Select 
+                  value={filters.month} 
+                  onValueChange={(value) => setFilters({...filters, month: value})}
+                  disabled={!filters.year || filters.year === 'all'}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="All months" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All months</SelectItem>
+                    {monthOptions.map((month) => (
+                      <SelectItem key={month.value} value={month.value}>
+                        {month.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="space-y-2">
                 <Label>Assignee</Label>
                 <Select value={filters.assignee} onValueChange={(value) => setFilters({...filters, assignee: value})}>
