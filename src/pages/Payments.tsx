@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -28,11 +29,20 @@ interface Client {
   name: string;
 }
 
+interface Project {
+  id: string;
+  name: string;
+  client_id: string;
+}
+
 interface Invoice {
   id: string;
   amount: number;
+  status: string;
   clients: { name: string };
   projects: { name: string };
+  client_id: string;
+  project_id: string;
 }
 
 const Payments = () => {
@@ -45,6 +55,8 @@ const Payments = () => {
     end_date: ''
   });
   const [newPayment, setNewPayment] = useState({
+    client_id: '',
+    project_id: '',
     invoice_id: '',
     amount: '',
     payment_method: '',
@@ -93,43 +105,58 @@ const Payments = () => {
     }
   });
 
-  const { data: invoices = [] } = useQuery({
-    queryKey: ['unpaid-invoices'],
+  // Fetch projects for selected client
+  const { data: clientProjects = [] } = useQuery({
+    queryKey: ['client-projects', newPayment.client_id],
     queryFn: async () => {
+      if (!newPayment.client_id) return [];
+      
+      const { data, error } = await supabase
+        .from('projects')
+        .select('id, name, client_id')
+        .eq('client_id', newPayment.client_id)
+        .order('name');
+      
+      if (error) throw error;
+      return data as Project[];
+    },
+    enabled: !!newPayment.client_id
+  });
+
+  // Fetch unpaid invoices for selected project
+  const { data: projectInvoices = [] } = useQuery({
+    queryKey: ['project-invoices', newPayment.project_id],
+    queryFn: async () => {
+      if (!newPayment.project_id) return [];
+      
       const { data, error } = await supabase
         .from('invoices')
         .select(`
           id,
           amount,
+          status,
           clients(name),
-          projects(name)
+          projects(name),
+          client_id,
+          project_id
         `)
+        .eq('project_id', newPayment.project_id)
         .eq('status', 'Sent')
         .order('created_at', { ascending: false });
       
       if (error) throw error;
       return data as Invoice[];
-    }
+    },
+    enabled: !!newPayment.project_id
   });
 
   const addPaymentMutation = useMutation({
     mutationFn: async (paymentData: any) => {
-      // Get invoice details
-      const { data: invoice, error: invoiceError } = await supabase
-        .from('invoices')
-        .select('client_id, project_id')
-        .eq('id', paymentData.invoice_id)
-        .single();
-      
-      if (invoiceError) throw invoiceError;
-
       // Create payment
       const { data, error } = await supabase
         .from('payments')
         .insert([{
           ...paymentData,
-          client_id: invoice.client_id,
-          project_id: invoice.project_id,
           amount: parseFloat(paymentData.amount)
         }])
         .select()
@@ -149,9 +176,11 @@ const Payments = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['payments'] });
-      queryClient.invalidateQueries({ queryKey: ['unpaid-invoices'] });
+      queryClient.invalidateQueries({ queryKey: ['project-invoices'] });
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
       setNewPayment({
+        client_id: '',
+        project_id: '',
         invoice_id: '',
         amount: '',
         payment_method: '',
@@ -165,12 +194,48 @@ const Payments = () => {
     }
   });
 
+  const handleClientChange = (clientId: string) => {
+    setNewPayment({
+      ...newPayment,
+      client_id: clientId,
+      project_id: '',
+      invoice_id: '',
+      amount: ''
+    });
+  };
+
+  const handleProjectChange = (projectId: string) => {
+    setNewPayment({
+      ...newPayment,
+      project_id: projectId,
+      invoice_id: '',
+      amount: ''
+    });
+  };
+
+  const handleInvoiceChange = (invoiceId: string) => {
+    const invoice = projectInvoices.find(inv => inv.id === invoiceId);
+    setNewPayment({
+      ...newPayment,
+      invoice_id: invoiceId,
+      amount: invoice ? invoice.amount.toString() : ''
+    });
+  };
+
   const handleAddPayment = () => {
-    if (!newPayment.invoice_id || !newPayment.amount) {
-      toast.error('Please fill in required fields');
+    if (!newPayment.client_id || !newPayment.project_id || !newPayment.invoice_id || !newPayment.amount) {
+      toast.error('Please fill in all required fields');
       return;
     }
-    addPaymentMutation.mutate(newPayment);
+    
+    addPaymentMutation.mutate({
+      client_id: newPayment.client_id,
+      project_id: newPayment.project_id,
+      invoice_id: newPayment.invoice_id,
+      amount: newPayment.amount,
+      payment_method: newPayment.payment_method,
+      payment_date: newPayment.payment_date
+    });
   };
 
   const clearFilters = () => {
@@ -225,27 +290,63 @@ const Payments = () => {
                 </DialogHeader>
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="invoice">Invoice</Label>
-                    <Select value={newPayment.invoice_id} onValueChange={(value) => {
-                      const invoice = invoices.find(inv => inv.id === value);
-                      setNewPayment({
-                        ...newPayment, 
-                        invoice_id: value,
-                        amount: invoice ? invoice.amount.toString() : ''
-                      });
-                    }}>
+                    <Label htmlFor="client">Client</Label>
+                    <Select value={newPayment.client_id} onValueChange={handleClientChange}>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select an invoice" />
+                        <SelectValue placeholder="Select a client" />
                       </SelectTrigger>
                       <SelectContent>
-                        {invoices.map((invoice) => (
-                          <SelectItem key={invoice.id} value={invoice.id}>
-                            {invoice.id} - {invoice.clients.name} (₹{invoice.amount})
+                        {clients.map((client) => (
+                          <SelectItem key={client.id} value={client.id}>
+                            {client.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
+                  
+                  {newPayment.client_id && (
+                    <div className="space-y-2">
+                      <Label htmlFor="project">Project</Label>
+                      <Select value={newPayment.project_id} onValueChange={handleProjectChange}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a project" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {clientProjects.map((project) => (
+                            <SelectItem key={project.id} value={project.id}>
+                              {project.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                  
+                  {newPayment.project_id && (
+                    <div className="space-y-2">
+                      <Label htmlFor="invoice">Invoice</Label>
+                      <Select value={newPayment.invoice_id} onValueChange={handleInvoiceChange}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select an invoice" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {projectInvoices.length === 0 ? (
+                            <SelectItem value="no-invoices" disabled>
+                              No unpaid invoices found
+                            </SelectItem>
+                          ) : (
+                            projectInvoices.map((invoice) => (
+                              <SelectItem key={invoice.id} value={invoice.id}>
+                                {invoice.id} - ₹{invoice.amount} ({invoice.status})
+                              </SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                  
                   <div className="space-y-2">
                     <Label htmlFor="amount">Amount</Label>
                     <Input

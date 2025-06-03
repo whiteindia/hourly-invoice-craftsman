@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { Plus, DollarSign, Clock, User } from 'lucide-react';
+import { Plus, DollarSign, Clock, User, Upload, Filter } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -23,6 +23,8 @@ interface Project {
   hourly_rate: number;
   total_hours: number;
   status: ProjectStatus;
+  start_date?: string;
+  created_at: string;
   clients: {
     name: string;
   };
@@ -39,9 +41,17 @@ const Projects = () => {
     name: '',
     client_id: '',
     type: '' as ProjectType | '',
-    hourly_rate: ''
+    hourly_rate: '',
+    basis: 'tasks' as 'tasks' | 'brd',
+    start_date: '',
+    brd_file: null as File | null
   });
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [filters, setFilters] = useState({
+    year: new Date().getFullYear().toString(),
+    client_id: '',
+    status: ''
+  });
 
   const projectTypes: { value: ProjectType; rate: number }[] = [
     { value: "DevOps", rate: 100 },
@@ -51,16 +61,40 @@ const Projects = () => {
     { value: "Technical Writing", rate: 80 }
   ];
 
-  // Fetch projects with client data
+  // Get years for filter dropdown
+  const currentYear = new Date().getFullYear();
+  const years = Array.from({ length: 5 }, (_, i) => currentYear - i);
+
+  // Fetch projects with client data and filters
   const { data: projects = [], isLoading } = useQuery({
-    queryKey: ['projects'],
+    queryKey: ['projects', filters],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('projects')
         .select(`
           *,
           clients(name)
-        `);
+        `)
+        .in('status', ['Active', 'Completed']);
+
+      // Filter by year
+      if (filters.year) {
+        const startOfYear = `${filters.year}-01-01`;
+        const endOfYear = `${filters.year}-12-31`;
+        query = query.gte('created_at', startOfYear).lte('created_at', endOfYear + 'T23:59:59');
+      }
+
+      // Filter by client
+      if (filters.client_id && filters.client_id !== 'all') {
+        query = query.eq('client_id', filters.client_id);
+      }
+
+      // Filter by status
+      if (filters.status && filters.status !== 'all') {
+        query = query.eq('status', filters.status);
+      }
+
+      const { data, error } = await query.order('created_at', { ascending: false });
       
       if (error) throw error;
       return data as Project[];
@@ -86,11 +120,15 @@ const Projects = () => {
       name: string;
       client_id: string;
       type: ProjectType;
-      hourly_rate: number;
+      hourly_rate?: number;
+      start_date: string;
     }) => {
       const { data, error } = await supabase
         .from('projects')
-        .insert(projectData)
+        .insert({
+          ...projectData,
+          hourly_rate: projectData.hourly_rate || 0
+        })
         .select()
         .single();
       
@@ -99,7 +137,15 @@ const Projects = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
-      setNewProject({ name: '', client_id: '', type: '', hourly_rate: '' });
+      setNewProject({ 
+        name: '', 
+        client_id: '', 
+        type: '', 
+        hourly_rate: '', 
+        basis: 'tasks', 
+        start_date: '',
+        brd_file: null 
+      });
       setIsDialogOpen(false);
       toast.success('Project created successfully!');
     },
@@ -113,13 +159,42 @@ const Projects = () => {
     setNewProject({
       ...newProject,
       type,
-      hourly_rate: projectType ? projectType.rate.toString() : ''
+      hourly_rate: projectType && newProject.basis === 'tasks' ? projectType.rate.toString() : ''
     });
   };
 
+  const handleBasisChange = (basis: 'tasks' | 'brd') => {
+    const projectType = projectTypes.find(pt => pt.value === newProject.type);
+    setNewProject({
+      ...newProject,
+      basis,
+      hourly_rate: basis === 'tasks' && projectType ? projectType.rate.toString() : '',
+      brd_file: null
+    });
+  };
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file && file.type === 'application/pdf') {
+      setNewProject({ ...newProject, brd_file: file });
+    } else {
+      toast.error('Please select a PDF file');
+    }
+  };
+
   const handleAddProject = () => {
-    if (!newProject.name || !newProject.client_id || !newProject.type || !newProject.hourly_rate) {
-      toast.error('Please fill in all fields');
+    if (!newProject.name || !newProject.client_id || !newProject.type || !newProject.start_date) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+
+    if (newProject.basis === 'tasks' && !newProject.hourly_rate) {
+      toast.error('Please enter hourly rate for task-based projects');
+      return;
+    }
+
+    if (newProject.basis === 'brd' && !newProject.brd_file) {
+      toast.error('Please upload BRD file for BRD-based projects');
       return;
     }
 
@@ -127,36 +202,17 @@ const Projects = () => {
       name: newProject.name,
       client_id: newProject.client_id,
       type: newProject.type as ProjectType,
-      hourly_rate: parseFloat(newProject.hourly_rate)
+      hourly_rate: newProject.basis === 'tasks' ? parseFloat(newProject.hourly_rate) : undefined,
+      start_date: newProject.start_date
     });
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'Active':
-        return 'bg-green-100 text-green-800';
-      case 'Completed':
-        return 'bg-blue-100 text-blue-800';
-      case 'On Hold':
-        return 'bg-yellow-100 text-yellow-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  const getTypeColor = (type: string) => {
-    switch (type) {
-      case 'DevOps':
-        return 'bg-purple-100 text-purple-800';
-      case 'Marketing':
-        return 'bg-pink-100 text-pink-800';
-      case 'Consulting':
-        return 'bg-blue-100 text-blue-800';
-      case 'Strategy':
-        return 'bg-orange-100 text-orange-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
+  const clearFilters = () => {
+    setFilters({ 
+      year: new Date().getFullYear().toString(), 
+      client_id: '', 
+      status: '' 
+    });
   };
 
   if (isLoading) {
@@ -187,11 +243,11 @@ const Projects = () => {
                 New Project
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-w-2xl">
               <DialogHeader>
                 <DialogTitle>Create New Project</DialogTitle>
                 <DialogDescription>
-                  Set up a new project with client and hourly rates.
+                  Set up a new project with client and project details.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
@@ -226,20 +282,61 @@ const Projects = () => {
                     <SelectContent>
                       {projectTypes.map((type) => (
                         <SelectItem key={type.value} value={type.value}>
-                          {type.value} (₹{type.rate}/hr)
+                          {type.value}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="hourlyRate">Hourly Rate (₹)</Label>
+                  <Label htmlFor="basis">Project Basis</Label>
+                  <Select value={newProject.basis} onValueChange={handleBasisChange}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select project basis" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="tasks">Tasks Basis</SelectItem>
+                      <SelectItem value="brd">BRD Basis</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {newProject.basis === 'tasks' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="hourlyRate">Hourly Rate (₹)</Label>
+                    <Input
+                      id="hourlyRate"
+                      type="number"
+                      value={newProject.hourly_rate}
+                      onChange={(e) => setNewProject({...newProject, hourly_rate: e.target.value})}
+                      placeholder="100"
+                    />
+                  </div>
+                )}
+                {newProject.basis === 'brd' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="brdFile">Upload BRD (PDF)</Label>
+                    <div className="flex items-center space-x-2">
+                      <Input
+                        id="brdFile"
+                        type="file"
+                        accept=".pdf"
+                        onChange={handleFileUpload}
+                        className="flex-1"
+                      />
+                      <Upload className="h-4 w-4 text-gray-500" />
+                    </div>
+                    {newProject.brd_file && (
+                      <p className="text-sm text-green-600">File selected: {newProject.brd_file.name}</p>
+                    )}
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <Label htmlFor="startDate">Start Date</Label>
                   <Input
-                    id="hourlyRate"
-                    type="number"
-                    value={newProject.hourly_rate}
-                    onChange={(e) => setNewProject({...newProject, hourly_rate: e.target.value})}
-                    placeholder="100"
+                    id="startDate"
+                    type="date"
+                    value={newProject.start_date}
+                    onChange={(e) => setNewProject({...newProject, start_date: e.target.value})}
                   />
                 </div>
                 <Button 
@@ -253,6 +350,67 @@ const Projects = () => {
             </DialogContent>
           </Dialog>
         </div>
+
+        {/* Filters */}
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <Filter className="h-5 w-5 mr-2" />
+              Filters
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+              <div className="space-y-2">
+                <Label>Year</Label>
+                <Select value={filters.year} onValueChange={(value) => setFilters({...filters, year: value})}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select year" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {years.map((year) => (
+                      <SelectItem key={year} value={year.toString()}>
+                        {year}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Client</Label>
+                <Select value={filters.client_id} onValueChange={(value) => setFilters({...filters, client_id: value})}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All clients" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All clients</SelectItem>
+                    {clients.map((client) => (
+                      <SelectItem key={client.id} value={client.id}>
+                        {client.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Status</Label>
+                <Select value={filters.status} onValueChange={(value) => setFilters({...filters, status: value})}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All statuses" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All statuses</SelectItem>
+                    <SelectItem value="Active">Active</SelectItem>
+                    <SelectItem value="Completed">Completed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button variant="outline" onClick={clearFilters}>
+                Clear Filters
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
           {projects.map((project) => (
@@ -286,6 +444,11 @@ const Projects = () => {
                       <span>{project.total_hours}h logged</span>
                     </div>
                   </div>
+                  {project.start_date && (
+                    <div className="text-sm text-gray-600">
+                      Started: {project.start_date}
+                    </div>
+                  )}
                   <div className="pt-2 border-t">
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-gray-600">Total Value</span>
@@ -299,9 +462,45 @@ const Projects = () => {
             </Card>
           ))}
         </div>
+
+        {projects.length === 0 && (
+          <Card>
+            <CardContent className="text-center py-8 text-gray-500">
+              No projects found with current filters.
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );
+
+  function getStatusColor(status: string) {
+    switch (status) {
+      case 'Active':
+        return 'bg-green-100 text-green-800';
+      case 'Completed':
+        return 'bg-blue-100 text-blue-800';
+      case 'On Hold':
+        return 'bg-yellow-100 text-yellow-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  }
+
+  function getTypeColor(type: string) {
+    switch (type) {
+      case 'DevOps':
+        return 'bg-purple-100 text-purple-800';
+      case 'Marketing':
+        return 'bg-pink-100 text-pink-800';
+      case 'Consulting':
+        return 'bg-blue-100 text-blue-800';
+      case 'Strategy':
+        return 'bg-orange-100 text-orange-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  }
 };
 
 export default Projects;
