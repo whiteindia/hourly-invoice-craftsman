@@ -93,7 +93,7 @@ const Projects = () => {
       }
 
       // Filter by status
-      if (filters.status && filters.status !== 'all') {
+      if (filters.status && filters.status !== '') {
         query = query.eq('status', filters.status);
       }
 
@@ -386,7 +386,7 @@ const Projects = () => {
                     <SelectValue placeholder="All clients" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All clients</SelectItem>
+                    <SelectItem value="">All clients</SelectItem>
                     {clients.map((client) => (
                       <SelectItem key={client.id} value={client.id}>
                         {client.name}
@@ -402,7 +402,7 @@ const Projects = () => {
                     <SelectValue placeholder="All statuses" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All statuses</SelectItem>
+                    <SelectItem value="">All statuses</SelectItem>
                     <SelectItem value="Active">Active</SelectItem>
                     <SelectItem value="Completed">Completed</SelectItem>
                   </SelectContent>
