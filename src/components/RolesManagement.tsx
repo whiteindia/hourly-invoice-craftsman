@@ -28,14 +28,8 @@ const RolesManagement = () => {
 
   const fetchRoles = async () => {
     try {
-      // Get distinct roles from role_privileges table with privilege counts
-      const { data, error } = await supabase
-        .from('role_privileges')
-        .select('role')
-        .order('role');
-
-      if (error) throw error;
-
+      console.log('Fetching roles...');
+      
       // Define the available roles properly typed
       const availableRoles: AppRole[] = ['admin', 'manager', 'teamlead', 'associate', 'accountant'];
       
@@ -48,7 +42,12 @@ const RolesManagement = () => {
             .eq('role', role)
             .eq('allowed', true);
 
-          if (error) throw error;
+          if (error) {
+            console.error(`Error fetching privileges for role ${role}:`, error);
+            throw error;
+          }
+
+          console.log(`Role ${role} has ${count} privileges`);
 
           return {
             role,
@@ -57,6 +56,7 @@ const RolesManagement = () => {
         })
       );
 
+      console.log('Role stats:', roleStats);
       setRoles(roleStats);
     } catch (error) {
       console.error('Error fetching roles:', error);
