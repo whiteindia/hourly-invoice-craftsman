@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -20,7 +19,7 @@ import { logActivity } from '@/utils/activityLogger';
 
 type TaskStatus = Database['public']['Enums']['task_status'];
 
-interface Task {
+interface TaskData {
   id: string;
   name: string;
   project_id: string;
@@ -65,11 +64,11 @@ const Tasks = () => {
     assignee_id: '',
     status: 'Not Started' as TaskStatus
   });
-  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [editingTask, setEditingTask] = useState<TaskData | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isCommentDialogOpen, setIsCommentDialogOpen] = useState(false);
-  const [selectedTaskForComment, setSelectedTaskForComment] = useState<Task | null>(null);
+  const [selectedTaskForComment, setSelectedTaskForComment] = useState<TaskData | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedProject, setSelectedProject] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -93,7 +92,7 @@ const Tasks = () => {
         .order('created_at', { ascending: false });
       
       if (error) throw error;
-      return data as Task[];
+      return data as TaskData[];
     }
   });
 
