@@ -120,13 +120,16 @@ const RoleDialog: React.FC<RoleDialogProps> = ({ open, onClose, role, isEditing 
   };
 
   const updatePrivilege = (page: string, operation: CrudOperation, allowed: boolean) => {
-    setPrivileges(prev => 
-      prev.map(p => 
+    console.log('Updating privilege:', { page, operation, allowed });
+    setPrivileges(prev => {
+      const updated = prev.map(p => 
         p.page_name === page && p.operation === operation 
           ? { ...p, allowed } 
           : p
-      )
-    );
+      );
+      console.log('Updated privileges:', updated.filter(p => p.page_name === page));
+      return updated;
+    });
   };
 
   const handleSave = async () => {
@@ -251,13 +254,15 @@ const RoleDialog: React.FC<RoleDialogProps> = ({ open, onClose, role, isEditing 
                         {operations.map(operation => {
                           const privilege = getPrivilege(page, operation);
                           return (
-                            <tr key={operation} className="hover:bg-gray-50">
+                            <tr key={`${page}-${operation}`} className="hover:bg-gray-50">
                               <td className="p-2 border-b font-medium capitalize">{operation}</td>
                               <td className="p-2 border-b text-center">
                                 <Checkbox
                                   checked={privilege?.allowed || false}
                                   onCheckedChange={(checked) => {
-                                    updatePrivilege(page, operation, Boolean(checked));
+                                    const isChecked = checked === true;
+                                    console.log(`Checkbox changed for ${page}-${operation}:`, isChecked);
+                                    updatePrivilege(page, operation, isChecked);
                                   }}
                                 />
                               </td>
