@@ -101,6 +101,7 @@ const Tasks = () => {
     name: '',
     project_id: '',
     assignee_id: '',
+    assigner_id: '',
     status: 'Not Started' as TaskStatus,
     deadline: null as Date | null,
     estimated_duration: ''
@@ -222,13 +223,18 @@ const Tasks = () => {
   // Mutation to create a new task
   const createTaskMutation = useMutation({
     mutationFn: async (taskData: any) => {
+      // Get current user as assigner if not provided
+      const { data: { user } } = await supabase.auth.getUser();
+      const finalTaskData = {
+        ...taskData,
+        assigner_id: taskData.assigner_id || user?.id,
+        deadline: taskData.deadline ? format(taskData.deadline, 'yyyy-MM-dd') : null,
+        estimated_duration: taskData.estimated_duration ? parseFloat(taskData.estimated_duration) : null
+      };
+
       const { data, error } = await supabase
         .from('tasks')
-        .insert([{
-          ...taskData,
-          deadline: taskData.deadline ? format(taskData.deadline, 'yyyy-MM-dd') : null,
-          estimated_duration: taskData.estimated_duration ? parseFloat(taskData.estimated_duration) : null
-        }])
+        .insert([finalTaskData])
         .select()
         .single();
       
@@ -252,6 +258,7 @@ const Tasks = () => {
         name: '',
         project_id: '',
         assignee_id: '',
+        assigner_id: '',
         status: 'Not Started',
         deadline: null,
         estimated_duration: ''

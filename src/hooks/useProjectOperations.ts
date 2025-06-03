@@ -133,7 +133,7 @@ export const useProjectOperations = () => {
 
   // Mutation to delete a project with proper cascade handling
   const deleteProjectMutation = useMutation({
-    mutationFn: async (id: string): Promise<{ id: string; projectData: ProjectData }> => {
+    mutationFn: async (id: string) => {
       console.log('Starting project deletion for ID:', id);
       
       // Get project details for logging before deletion
@@ -218,20 +218,7 @@ export const useProjectOperations = () => {
       console.log('Project deletion completed successfully');
       return { 
         id, 
-        projectData: {
-          ...projectData,
-          id,
-          client_id: '',
-          type: '',
-          hourly_rate: 0,
-          project_amount: null,
-          total_hours: 0,
-          status: '',
-          start_date: null,
-          deadline: null,
-          brd_file_url: null,
-          created_at: ''
-        } as ProjectData 
+        projectData
       };
     },
     onSuccess: async (result) => {
