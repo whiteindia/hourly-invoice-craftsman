@@ -38,11 +38,18 @@ export const useInvitations = () => {
       client_id?: string;
       employee_data?: any;
     }) => {
+      // Get current user session instead of accessing auth.users table
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+
       const { data, error } = await supabase
         .from('invitations')
         .insert([{
           ...invitationData,
-          invited_by: (await supabase.auth.getUser()).data.user?.id
+          invited_by: user.id
         }])
         .select()
         .single();

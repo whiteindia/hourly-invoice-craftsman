@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -13,8 +12,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import Navigation from '@/components/Navigation';
 import EmployeeServicesSelect from '@/components/EmployeeServicesSelect';
-import InvitationDialog from '@/components/InvitationDialog';
 import { useRoles } from '@/hooks/useRoles';
+import { useInvitations } from '@/hooks/useInvitations';
 
 interface Employee {
   id: string;
@@ -41,6 +40,7 @@ const Employees = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
+  const [sendInviteEmail, setSendInviteEmail] = useState(true);
   const [newEmployee, setNewEmployee] = useState({
     name: '',
     email: '',
@@ -50,6 +50,7 @@ const Employees = () => {
 
   // Fetch dynamic roles
   const { roles, loading: rolesLoading } = useRoles();
+  const { sendInvitation } = useInvitations();
 
   const { data: employees = [], isLoading } = useQuery({
     queryKey: ['employees'],
@@ -122,6 +123,24 @@ const Employees = () => {
           console.log('Failed to add employee services:', servicesError);
         }
       }
+
+      // Send invitation email if enabled and not editing
+      if (sendInviteEmail && !editingEmployee) {
+        try {
+          await sendInvitation.mutateAsync({
+            email: employeeData.email,
+            role: employeeData.role,
+            employee_data: {
+              name: employeeData.name,
+              contact_number: employeeData.contact_number || ''
+            }
+          });
+          console.log('Invitation sent successfully');
+        } catch (inviteError) {
+          console.log('Failed to send invitation:', inviteError);
+          // Don't throw error here as employee was created successfully
+        }
+      }
       
       return data;
     },
@@ -130,8 +149,9 @@ const Employees = () => {
       queryClient.invalidateQueries({ queryKey: ['employee-services'] });
       setNewEmployee({ name: '', email: '', contact_number: '', role: 'associate' });
       setSelectedServices([]);
+      setSendInviteEmail(true);
       setIsDialogOpen(false);
-      toast.success('Employee created successfully!');
+      toast.success(editingEmployee ? 'Employee updated successfully!' : 'Employee created and invitation sent!');
     },
     onError: (error) => {
       toast.error('Failed to create employee: ' + error.message);
@@ -181,6 +201,7 @@ const Employees = () => {
       queryClient.invalidateQueries({ queryKey: ['employee-services'] });
       setEditingEmployee(null);
       setSelectedServices([]);
+      setSendInviteEmail(true);
       setIsDialogOpen(false);
       toast.success('Employee updated successfully!');
     },
@@ -235,6 +256,7 @@ const Employees = () => {
       .map(es => es.service_id);
     setSelectedServices(empServices);
     
+    setSendInviteEmail(false); // Don't send invite when editing
     setIsDialogOpen(true);
   };
 
@@ -248,6 +270,7 @@ const Employees = () => {
     setNewEmployee({ name: '', email: '', contact_number: '', role: roles[0] || 'associate' });
     setSelectedServices([]);
     setEditingEmployee(null);
+    setSendInviteEmail(true);
   };
 
   const getEmployeeServices = (employeeId: string) => {
@@ -283,94 +306,97 @@ const Employees = () => {
             <p className="text-gray-600 mt-2">Manage your team members, their roles, and services</p>
           </div>
           
-          <div className="flex gap-2">
-            <InvitationDialog 
-              trigger={
-                <Button variant="outline" className="bg-green-600 hover:bg-green-700 text-white">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Send Invitation
-                </Button>
-              }
-            />
-            
-            <Dialog open={isDialogOpen} onOpenChange={(open) => {
-              setIsDialogOpen(open);
-              if (!open) resetForm();
-            }}>
-              <DialogTrigger asChild>
-                <Button className="bg-blue-600 hover:bg-blue-700">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Employee
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-md">
-                <DialogHeader>
-                  <DialogTitle>{editingEmployee ? 'Edit Employee' : 'Add New Employee'}</DialogTitle>
-                  <DialogDescription>
-                    {editingEmployee ? 'Update employee information and services.' : 'Add a new team member with their services.'}
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Name *</Label>
-                    <Input
-                      id="name"
-                      value={newEmployee.name}
-                      onChange={(e) => setNewEmployee({...newEmployee, name: e.target.value})}
-                      placeholder="Enter employee name"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email *</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      value={newEmployee.email}
-                      onChange={(e) => setNewEmployee({...newEmployee, email: e.target.value})}
-                      placeholder="Enter email address"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="contact">Contact Number</Label>
-                    <Input
-                      id="contact"
-                      value={newEmployee.contact_number}
-                      onChange={(e) => setNewEmployee({...newEmployee, contact_number: e.target.value})}
-                      placeholder="Enter contact number"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="role">Role</Label>
-                    <Select value={newEmployee.role} onValueChange={(value) => setNewEmployee({...newEmployee, role: value})}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select role" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {roles.map((role) => (
-                          <SelectItem key={role} value={role} className="capitalize">
-                            {role}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <EmployeeServicesSelect 
-                    selectedServices={selectedServices}
-                    onServicesChange={setSelectedServices}
+          <Dialog open={isDialogOpen} onOpenChange={(open) => {
+            setIsDialogOpen(open);
+            if (!open) resetForm();
+          }}>
+            <DialogTrigger asChild>
+              <Button className="bg-blue-600 hover:bg-blue-700">
+                <Plus className="h-4 w-4 mr-2" />
+                Add Employee
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>{editingEmployee ? 'Edit Employee' : 'Add New Employee'}</DialogTitle>
+                <DialogDescription>
+                  {editingEmployee ? 'Update employee information and services.' : 'Add a new team member. An invitation email will be sent automatically.'}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name">Name *</Label>
+                  <Input
+                    id="name"
+                    value={newEmployee.name}
+                    onChange={(e) => setNewEmployee({...newEmployee, name: e.target.value})}
+                    placeholder="Enter employee name"
                   />
-                  <Button 
-                    onClick={handleSubmit} 
-                    className="w-full"
-                    disabled={addEmployeeMutation.isPending || updateEmployeeMutation.isPending}
-                  >
-                    {addEmployeeMutation.isPending || updateEmployeeMutation.isPending 
-                      ? (editingEmployee ? 'Updating...' : 'Creating...') 
-                      : (editingEmployee ? 'Update Employee' : 'Create Employee')}
-                  </Button>
                 </div>
-              </DialogContent>
-            </Dialog>
-          </div>
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email *</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={newEmployee.email}
+                    onChange={(e) => setNewEmployee({...newEmployee, email: e.target.value})}
+                    placeholder="Enter email address"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="contact">Contact Number</Label>
+                  <Input
+                    id="contact"
+                    value={newEmployee.contact_number}
+                    onChange={(e) => setNewEmployee({...newEmployee, contact_number: e.target.value})}
+                    placeholder="Enter contact number"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="role">Role</Label>
+                  <Select value={newEmployee.role} onValueChange={(value) => setNewEmployee({...newEmployee, role: value})}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select role" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {roles.map((role) => (
+                        <SelectItem key={role} value={role} className="capitalize">
+                          {role}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <EmployeeServicesSelect 
+                  selectedServices={selectedServices}
+                  onServicesChange={setSelectedServices}
+                />
+                {!editingEmployee && (
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id="sendInvite"
+                      checked={sendInviteEmail}
+                      onChange={(e) => setSendInviteEmail(e.target.checked)}
+                      className="rounded"
+                    />
+                    <Label htmlFor="sendInvite" className="text-sm">
+                      Send password setup invitation email
+                    </Label>
+                  </div>
+                )}
+                <Button 
+                  onClick={handleSubmit} 
+                  className="w-full"
+                  disabled={addEmployeeMutation.isPending || updateEmployeeMutation.isPending}
+                >
+                  {addEmployeeMutation.isPending || updateEmployeeMutation.isPending 
+                    ? (editingEmployee ? 'Updating...' : 'Creating...') 
+                    : (editingEmployee ? 'Update Employee' : 'Create Employee')}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
 
         <Card>
