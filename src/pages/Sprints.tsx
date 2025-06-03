@@ -6,8 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Plus, Calendar, CheckCircle, Clock, AlertCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import SprintDialog from '@/components/SprintDialog';
 import SprintCard from '@/components/SprintCard';
+import Navigation from '@/components/Navigation';
 import { toast } from '@/hooks/use-toast';
 
 interface Sprint {
@@ -42,9 +44,66 @@ interface SprintWithTasks extends Sprint {
   tasks: Task[];
 }
 
-const Sprints = () => {
+const SprintsContent = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [selectedClient, setSelectedClient] = useState<string>('all');
+  const [selectedProject, setSelectedProject] = useState<string>('all');
+  const [selectedAssignee, setSelectedAssignee] = useState<string>('all');
+  const [selectedAssigner, setSelectedAssigner] = useState<string>('all');
+  const [selectedService, setSelectedService] = useState<string>('all');
   const queryClient = useQueryClient();
+
+  // Fetch clients for filter
+  const { data: clients = [] } = useQuery({
+    queryKey: ['clients'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('clients')
+        .select('id, name')
+        .order('name');
+      if (error) throw error;
+      return data || [];
+    }
+  });
+
+  // Fetch projects for filter
+  const { data: projects = [] } = useQuery({
+    queryKey: ['projects'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('projects')
+        .select('id, name')
+        .order('name');
+      if (error) throw error;
+      return data || [];
+    }
+  });
+
+  // Fetch employees for filter
+  const { data: employees = [] } = useQuery({
+    queryKey: ['employees'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('employees')
+        .select('id, name')
+        .order('name');
+      if (error) throw error;
+      return data || [];
+    }
+  });
+
+  // Fetch services for filter
+  const { data: services = [] } = useQuery({
+    queryKey: ['services'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('services')
+        .select('id, name')
+        .order('name');
+      if (error) throw error;
+      return data || [];
+    }
+  });
 
   // Fetch sprints with their tasks
   const { data: sprints = [], isLoading } = useQuery({
@@ -61,7 +120,7 @@ const Sprints = () => {
       // Fetch tasks for each sprint
       const sprintsWithTasks: SprintWithTasks[] = [];
       
-      for (const sprint of sprintsData) {
+      for (const sprint of sprintsData || []) {
         const { data: sprintTasks, error: tasksError } = await supabase
           .from('sprint_tasks')
           .select(`
@@ -89,7 +148,7 @@ const Sprints = () => {
         // Process tasks and add employee data separately
         const tasks: Task[] = [];
         
-        for (const st of sprintTasks) {
+        for (const st of sprintTasks || []) {
           if (st.tasks) {
             const task = st.tasks as any;
             let employeeData = null;
@@ -132,6 +191,39 @@ const Sprints = () => {
     }
   });
 
+  // Filter sprints based on selected filters
+  const filteredSprints = sprints.filter(sprint => {
+    if (sprint.tasks.length === 0) {
+      return selectedClient === 'all' && selectedProject === 'all' && selectedAssignee === 'all' && selectedAssigner === 'all' && selectedService === 'all';
+    }
+
+    return sprint.tasks.some(task => {
+      // Filter by client
+      if (selectedClient !== 'all') {
+        const clientName = clients.find(c => c.id === selectedClient)?.name;
+        if (task.projects?.clients?.name !== clientName) {
+          return false;
+        }
+      }
+
+      // Filter by project
+      if (selectedProject !== 'all') {
+        if (task.project_id !== selectedProject) {
+          return false;
+        }
+      }
+
+      // Filter by assignee
+      if (selectedAssignee !== 'all') {
+        if (task.assignee_id !== selectedAssignee) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  });
+
   // Update task status mutation
   const updateTaskStatus = useMutation({
     mutationFn: async ({ taskId, status }: { taskId: string; status: 'Not Started' | 'In Progress' | 'Completed' }) => {
@@ -149,7 +241,7 @@ const Sprints = () => {
         description: "Task status updated successfully",
       });
     },
-    onError: (error) => {
+    onError: () => {
       toast({
         title: "Error",
         description: "Failed to update task status",
@@ -218,6 +310,16 @@ const Sprints = () => {
     }
   };
 
+  const resetFilters = () => {
+    setSelectedClient('all');
+    setSelectedProject('all');
+    setSelectedAssignee('all');
+    setSelectedAssigner('all');
+    setSelectedService('all');
+  };
+
+  const hasActiveFilters = selectedClient !== 'all' || selectedProject !== 'all' || selectedAssignee !== 'all' || selectedAssigner !== 'all' || selectedService !== 'all';
+
   if (isLoading) {
     return (
       <div className="container mx-auto p-6">
@@ -238,15 +340,150 @@ const Sprints = () => {
         </Button>
       </div>
 
+      {/* Global Filters */}
+      <Card className="mb-6">
+        <CardHeader>
+          <div className="flex justify-between items-center">
+            <CardTitle>Filters</CardTitle>
+            {hasActiveFilters && (
+              <Button variant="outline" size="sm" onClick={resetFilters}>
+                Clear Filters
+              </Button>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-2">Client</label>
+              <Select value={selectedClient} onValueChange={setSelectedClient}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All Clients" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Clients</SelectItem>
+                  {clients.map((client) => (
+                    <SelectItem key={client.id} value={client.id}>
+                      {client.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-2">Project</label>
+              <Select value={selectedProject} onValueChange={setSelectedProject}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All Projects" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Projects</SelectItem>
+                  {projects.map((project) => (
+                    <SelectItem key={project.id} value={project.id}>
+                      {project.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-2">Assignee</label>
+              <Select value={selectedAssignee} onValueChange={setSelectedAssignee}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All Assignees" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Assignees</SelectItem>
+                  {employees.map((employee) => (
+                    <SelectItem key={employee.id} value={employee.id}>
+                      {employee.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-2">Assigner</label>
+              <Select value={selectedAssigner} onValueChange={setSelectedAssigner}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All Assigners" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Assigners</SelectItem>
+                  {employees.map((employee) => (
+                    <SelectItem key={employee.id} value={employee.id}>
+                      {employee.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-2">Service</label>
+              <Select value={selectedService} onValueChange={setSelectedService}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All Services" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Services</SelectItem>
+                  {services.map((service) => (
+                    <SelectItem key={service.id} value={service.id}>
+                      {service.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          
+          {hasActiveFilters && (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {selectedClient !== 'all' && (
+                <Badge variant="secondary">
+                  Client: {clients.find(c => c.id === selectedClient)?.name}
+                </Badge>
+              )}
+              {selectedProject !== 'all' && (
+                <Badge variant="secondary">
+                  Project: {projects.find(p => p.id === selectedProject)?.name}
+                </Badge>
+              )}
+              {selectedAssignee !== 'all' && (
+                <Badge variant="secondary">
+                  Assignee: {employees.find(e => e.id === selectedAssignee)?.name}
+                </Badge>
+              )}
+              {selectedAssigner !== 'all' && (
+                <Badge variant="secondary">
+                  Assigner: {employees.find(e => e.id === selectedAssigner)?.name}
+                </Badge>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       <div className="space-y-6">
-        {sprints.length === 0 ? (
+        {filteredSprints.length === 0 ? (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-12">
               <Calendar className="h-12 w-12 text-gray-400 mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">No sprints found</h3>
               <p className="text-gray-500 text-center mb-4">
-                Get started by creating your first sprint to organize your tasks.
+                {sprints.length === 0 
+                  ? "Get started by creating your first sprint to organize your tasks."
+                  : "No sprints match the current filters. Try adjusting your filter criteria."
+                }
               </p>
+              {hasActiveFilters && (
+                <Button variant="outline" onClick={resetFilters} className="mb-4">
+                  Clear Filters
+                </Button>
+              )}
               <Button onClick={() => setDialogOpen(true)}>
                 <Plus className="h-4 w-4 mr-2" />
                 Create Sprint
@@ -254,7 +491,7 @@ const Sprints = () => {
             </CardContent>
           </Card>
         ) : (
-          sprints.map((sprint) => (
+          filteredSprints.map((sprint) => (
             <SprintCard
               key={sprint.id}
               sprint={sprint}
@@ -275,6 +512,14 @@ const Sprints = () => {
         }}
       />
     </div>
+  );
+};
+
+const Sprints = () => {
+  return (
+    <Navigation>
+      <SprintsContent />
+    </Navigation>
   );
 };
 
