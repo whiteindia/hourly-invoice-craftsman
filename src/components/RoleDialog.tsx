@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import {
   Dialog,
@@ -256,7 +257,7 @@ const RoleDialog: React.FC<RoleDialogProps> = ({ open, onClose, role, isEditing 
                                 <Checkbox
                                   checked={privilege?.allowed || false}
                                   onCheckedChange={(checked) => {
-                                    updatePrivilege(page, operation, checked as boolean);
+                                    updatePrivilege(page, operation, Boolean(checked));
                                   }}
                                 />
                               </td>
