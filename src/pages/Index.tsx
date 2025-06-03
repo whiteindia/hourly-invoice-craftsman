@@ -18,6 +18,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import Navigation from '@/components/Navigation';
 import { useNavigate } from 'react-router-dom';
+import ActivityFeedTest from '@/components/ActivityFeedTest';
 
 const Index = () => {
   const navigate = useNavigate();
@@ -128,10 +129,11 @@ const Index = () => {
     }
   });
 
-  // Get activity feed
-  const { data: activityFeed = [] } = useQuery({
+  // Get activity feed with better error handling and debugging
+  const { data: activityFeed = [], error: activityError, isLoading: activityLoading } = useQuery({
     queryKey: ['activity-feed'],
     queryFn: async () => {
+      console.log('Fetching activity feed...');
       const { data, error } = await supabase
         .from('activity_feed')
         .select(`
@@ -141,10 +143,19 @@ const Index = () => {
         .order('created_at', { ascending: false })
         .limit(10);
       
-      if (error) throw error;
+      if (error) {
+        console.error('Activity feed error:', error);
+        throw error;
+      }
+      console.log('Activity feed data:', data);
       return data || [];
     }
   });
+
+  // Add some debugging logs
+  React.useEffect(() => {
+    console.log('Activity feed state:', { activityFeed, activityError, activityLoading });
+  }, [activityFeed, activityError, activityLoading]);
 
   const formatElapsedTime = (startTime: string) => {
     const start = new Date(startTime);
@@ -227,6 +238,9 @@ const Index = () => {
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
         </div>
+
+        {/* Add test component temporarily */}
+        <ActivityFeedTest />
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -393,14 +407,24 @@ const Index = () => {
               <CardTitle className="flex items-center">
                 <Activity className="h-5 w-5 mr-2 text-purple-600" />
                 Recent Activity
+                {activityLoading && <span className="ml-2 text-sm text-gray-500">(Loading...)</span>}
+                {activityError && <span className="ml-2 text-sm text-red-500">(Error)</span>}
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {activityFeed.length === 0 ? (
+              {activityError ? (
+                <div className="text-center py-8 text-red-500">
+                  <p>Error loading activity feed</p>
+                  <p className="text-sm">{activityError.message}</p>
+                </div>
+              ) : activityFeed.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">
                   <Activity className="h-12 w-12 mx-auto mb-4 text-gray-300" />
                   <p>No recent activity</p>
                   <p className="text-sm">Activity will appear here as team members work</p>
+                  <p className="text-xs text-gray-400 mt-2">
+                    Use the test component above to create sample activities
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-4">
