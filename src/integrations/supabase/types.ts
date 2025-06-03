@@ -141,6 +141,50 @@ export type Database = {
         }
         Relationships: []
       }
+      invitations: {
+        Row: {
+          client_id: string | null
+          created_at: string | null
+          email: string
+          employee_data: Json | null
+          expires_at: string | null
+          id: string
+          invited_by: string | null
+          role: string
+          status: string | null
+        }
+        Insert: {
+          client_id?: string | null
+          created_at?: string | null
+          email: string
+          employee_data?: Json | null
+          expires_at?: string | null
+          id?: string
+          invited_by?: string | null
+          role: string
+          status?: string | null
+        }
+        Update: {
+          client_id?: string | null
+          created_at?: string | null
+          email?: string
+          employee_data?: Json | null
+          expires_at?: string | null
+          id?: string
+          invited_by?: string | null
+          role?: string
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invitations_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       invoice_tasks: {
         Row: {
           id: string

@@ -1,3 +1,4 @@
+
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -16,6 +17,7 @@ import Services from "./pages/Services";
 import Wages from "./pages/Wages";
 import NotFound from "./pages/NotFound";
 import Roles from "./pages/Roles";
+import Invitations from "./pages/Invitations";
 
 const queryClient = new QueryClient();
 
@@ -105,6 +107,14 @@ function App() {
                 element={
                   <ProtectedRoute pageName="roles">
                     <Roles />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/invitations"
+                element={
+                  <ProtectedRoute pageName="invitations">
+                    <Invitations />
                   </ProtectedRoute>
                 }
               />
